@@ -1,0 +1,242 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #1a2e35; /* Darker base text color */
+  letter-spacing: 0.01em; /* Slight letter spacing for readability */
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Dark theme styles */
+body.dark-theme {
+  background-color: #121826;
+  color: #e2e8f0;
+}
+
+body.dark-theme .bg-white {
+  background-color: #1e293b;
+}
+
+body.dark-theme .bg-gray-50 {
+  background-color: #0f172a;
+}
+
+body.dark-theme .bg-blue-100 {
+  background-color: #1e293b;
+}
+
+body.dark-theme .text-gray-700 {
+  color: #e2e8f0;
+}
+
+body.dark-theme .text-gray-600,
+body.dark-theme .text-gray-500 {
+  color: #cbd5e1;
+}
+
+body.dark-theme .border-gray-100,
+body.dark-theme .border-gray-200 {
+  border-color: #334155;
+}
+
+body.dark-theme .bg-gray-200 {
+  background-color: #334155;
+}
+
+body.dark-theme .bg-gray-100 {
+  background-color: #1e293b;
+}
+
+/* Font size adjustment */
+html[data-font-size="small"] {
+  font-size: 14px;
+}
+
+html[data-font-size="medium"] {
+  font-size: 16px;
+}
+
+html[data-font-size="large"] {
+  font-size: 18px;
+}
+
+/* Improved text readability for all pages */
+body {
+  color: #1a2e35; /* Darker base text color */
+  letter-spacing: 0.01em; /* Slight letter spacing for readability */
+}
+
+/* Ensure heading contrast */
+h1, h2, h3, h4, h5, h6 {
+  color: #0f2027;
+  font-weight: 600;
+}
+
+/* Improve contrast for secondary text */
+.text-gray-500 {
+  color: #4b5563 !important; /* Darker gray for better readability */
+}
+
+.text-gray-600 {
+  color: #374151 !important; /* Improved contrast for better legibility */
+}
+
+/* Enhance readability on cards */
+.bg-white p, .bg-white span, .bg-white div {
+  color: #1f2937; /* Ensure text on white backgrounds has sufficient contrast */
+}
+
+/* Improved contrast for navigation and sidebar text */
+nav a, .sidebar a {
+  font-weight: 500;
+}
+
+/* Accessibility improvements */
+button, a {
+  font-weight: 500; /* Make button text bolder for better readability */
+}
+
+/* Form inputs - improve contrast */
+input, select, textarea {
+  color: #111827;
+  font-weight: 500;
+}
+
+/* Card content improvements */
+.card, .bg-white {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+/* Text on primary colored backgrounds */
+.bg-green-800, .bg-green-700, .bg-green-900, 
+.from-green-900, .to-green-700,
+.bg-indigo-600, .bg-indigo-700, .bg-blue-600, .bg-blue-700 {
+  color: #fff;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+/* Improve form label contrast */
+label {
+  color: #374151;
+  font-weight: 500;
+}
+
+/* Add contrast to buttons */
+button {
+  text-shadow: none;
+}
+
+/* Add these responsive utilities */
+
+/* Better handling of long text */
+.truncate-2-lines {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* Responsive font scaling */
+@media (max-width: 640px) {
+  html {
+    font-size: 14px;
+  }
+  
+  h1, h2, h3 {
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    -ms-word-break: break-all;
+    word-break: break-all;
+    word-break: break-word;
+    -ms-hyphens: auto;
+    -moz-hyphens: auto;
+    -webkit-hyphens: auto;
+    hyphens: auto;
+  }
+  
+  .container {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Improve form elements on small screens */
+@media (max-width: 640px) {
+  input, select, textarea, button {
+    font-size: 16px !important; /* Prevents iOS zoom on focus */
+  }
+}
+
+/* Better table handling on small screens */
+@media (max-width: 640px) {
+  table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+}
+
+/* Animation for mobile menu overlay */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* Utility classes for responsive spacing */
+.p-responsive {
+  padding: 0.75rem;
+}
+.m-responsive {
+  margin: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  .p-responsive {
+    padding: 1.25rem;
+  }
+  .m-responsive {
+    margin: 1.25rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .p-responsive {
+    padding: 1.5rem;
+  }
+  .m-responsive {
+    margin: 1.5rem;
+  }
+}
+
+/* Fix for mobile sticky positioning */
+.sticky-safe {
+  position: sticky;
+  top: env(safe-area-inset-top, 0);
+  z-index: 40;
+}
+
+/* Better tap targets on mobile */
+@media (max-width: 640px) {
+  button, a {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}

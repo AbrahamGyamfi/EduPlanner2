@@ -1,0 +1,80 @@
+.settings-container {
+    display: flex;
+    padding: 20px;
+  }
+  
+  .settings-menu {
+    width: 200px;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .menu-item {
+    padding: 10px;
+    margin: 5px 0;
+    cursor: pointer;
+    border-radius: 5px;
+  }
+  
+  .menu-item.active {
+    background: #66b2b2;
+    color: white;
+  }
+  
+  .settings-content {
+    flex-grow: 1;
+    padding-left: 30px;
+  }
+  
+  .toggle-option {
+    display: flex;
+    justify-content: space-between;
+    margin: 10px 0;
+  }
+  
+  /* Toggle Switch Styling */
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 34px;
+    height: 20px;
+  }
+  
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+  
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    border-radius: 34px;
+    transition: 0.4s;
+  }
+  
+  .slider::before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    border-radius: 50%;
+    transition: 0.4s;
+  }
+  
+  input:checked + .slider {
+    background-color: #66b2b2;
+  }
+  
+  input:checked + .slider::before {
+    transform: translateX(14px);
+  }
+  

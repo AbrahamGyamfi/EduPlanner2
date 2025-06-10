@@ -1,0 +1,33 @@
+/* App Global Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Poppins", sans-serif;
+  background-color: #f8f9fc;
+}
+
+/* Responsive Layout */
+@media screen and (max-width: 768px) {
+  .dashboard {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .dashboard-content {
+    padding: 20px;
+    margin: 10px;
+  }
+
+  .stats-section {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .courses-list {
+    flex-direction: column;
+  }
+}
