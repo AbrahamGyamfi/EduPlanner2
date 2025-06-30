@@ -84,7 +84,7 @@ function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-[#f7f9fc]">
-      <Sidebar activePage="dashboard" />
+      {/* <Sidebar activePage="dashboard" /> */}
       <div className="flex-1 p-8">
         {/* Header */}
         <div className="mb-8">

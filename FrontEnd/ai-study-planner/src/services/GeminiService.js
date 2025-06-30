@@ -1,7 +1,9 @@
 /**
  * Service for interacting with Google's Gemini API
  */
-const API_KEY = "AIzaSyAPiLPuXreD8XedE-6V-CZwSRvkl_eyDbE";
+// API key moved to backend environment variables for security
+// All AI operations now go through the backend API
+const API_KEY = "MOVED_TO_BACKEND_ENV_VARIABLES";
 const API_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL_NAME = "gemini-pro";
 

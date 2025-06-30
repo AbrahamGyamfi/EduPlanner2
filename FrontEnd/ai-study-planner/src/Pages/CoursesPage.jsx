@@ -11,10 +11,11 @@ function CoursesPage() {
     const saved = localStorage.getItem('courses');
     if (saved) {
       const parsedCourses = JSON.parse(saved);
-      // Ensure all existing courses have a status
+      // Ensure all existing courses have a status and slides array
       const updatedCourses = parsedCourses.map(course => ({
         ...course,
-        status: course.status || 'ongoing' // Set default status if not present
+        status: course.status || 'ongoing', // Set default status if not present
+        slides: Array.isArray(course.slides) ? course.slides : [] // Ensure slides is always an array
       }));
       localStorage.setItem('courses', JSON.stringify(updatedCourses));
       return updatedCourses;
@@ -60,6 +61,7 @@ function CoursesPage() {
       status: 'ongoing', // Explicitly set status as ongoing
       lastAccessed: new Date().toLocaleDateString(),
       assignments: [],
+      slides: [], // Initialize slides as empty array
       difficulty: 1,
       totalModules: 1,
       completedModules: 0
@@ -179,7 +181,7 @@ function CoursesPage() {
 
   return (
     <div className="flex min-h-screen bg-[#F3F4F6]">
-      <Sidebar activePage="courses" />
+      {/* <Sidebar activePage="courses" /> */}
       <div className="flex-1">
         <div className="p-8">
           {/* Header */}

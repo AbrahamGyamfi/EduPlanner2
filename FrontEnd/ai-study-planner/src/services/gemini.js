@@ -1,6 +1,8 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-const API_KEY = 'AIzaSyAPiLPuXreD8XedE-6V-CZwSRvkl_eyDbE';
+// API key moved to backend environment variables for security
+// All AI operations now go through the backend API
+const API_KEY = 'MOVED_TO_BACKEND_ENV_VARIABLES';
 const genAI = new GoogleGenerativeAI(API_KEY);
 
 export const generateSummary = async (topic, content = '') => {

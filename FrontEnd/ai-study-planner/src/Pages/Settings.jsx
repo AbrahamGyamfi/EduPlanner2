@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import Sidebar from "../components/sidebar";
-// import PageHeader from "../components/PageHeader";
+// import Sidebar from "../components/sidebar";
 import Switch from "../components/Switch";
-import { IoIosArrowDown } from "react-icons/io";
 import Navbar from '../components/PageHead';
+import { IoIosArrowDown } from "react-icons/io";
 
 const Settings = () => {
   const navigate = useNavigate();
@@ -118,7 +117,7 @@ const Settings = () => {
   
   return (
     <div className="flex min-h-screen bg-[#f7f9fc]">
-      <Sidebar activePage="settings" />
+      {/* <Sidebar activePage="settings" /> */}
       <div className="flex-1 p-8">
         {/* Navbar */}
         <div className="mb-8">

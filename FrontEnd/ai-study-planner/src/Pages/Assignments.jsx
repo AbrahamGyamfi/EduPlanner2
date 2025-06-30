@@ -5,17 +5,10 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import {
   getAssignments,
   saveAssignments,
-  ensureWeeklyAssignments,
-  updateAssignmentStatus,
-  groupAssignmentsByDate,
-  generateCalendarDates,
-  formatAssignmentDate,
-  sortAssignments,
   getPriorityInfo,
-  filterAssignments,
-  generateAssignmentWithGemini,
   calculateAssignmentProgress,
-  generateAssignmentAnalytics
+  createAssignment,
+  formatAssignmentDate
 } from '../utils/assignmentsUtils';
 
 // Reusable components
@@ -470,7 +463,7 @@ function Assignments() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar activePage="assignments" />
+      {/* <Sidebar activePage="assignments" /> */}
       <div className="flex-1 p-8">
         <div className="mb-8">
           <Navbar pageTitle="Assignments" />

@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import Logo from './Logo';
 
-const Sidebar = ({ activePage }) => {
+const Sidebar = ({ /* removed activePage */ }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -170,7 +170,7 @@ const Sidebar = ({ activePage }) => {
                   to={item.path}
                   className={({ isActive }) =>
                     `flex items-center ${isOpen ? 'gap-3' : 'justify-center'} px-4 py-3 rounded-lg transition-all duration-200 group ${
-                      isActive || activePage === item.path.substring(1)
+                      isActive
                         ? 'bg-[#1A1F2E] text-white'
                         : 'text-gray-400 hover:text-white hover:bg-[#1A1F2E]'
                     }`

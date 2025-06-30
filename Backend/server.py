@@ -1,6 +1,8 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from pymongo import MongoClient
+from flask_restful import Api
+from flask_swagger import swagger
 import bcrypt
 import json
 import os
@@ -11,6 +13,10 @@ from PyPDF2 import PdfReader
 import logging
 import sys
 from datetime import datetime
+from io import BytesIO
+import google.generativeai as genai
+from PIL import Image
+from pptx import Presentation
 
 # Configure logging
 logging.basicConfig(
@@ -28,18 +34,50 @@ logger = logging.getLogger(__name__)
 # Load environment variables from .env file
 load_dotenv()
 
-app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+# Configure upload folder from environment variables
+UPLOAD_FOLDER = os.path.join(os.getcwd(), os.getenv('UPLOAD_FOLDER', 'uploaded_slides'))
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
+ALLOWED_EXTENSIONS = {"pdf", "txt", "docx", "pptx", "png", "jpg", "jpeg"}
 
-# Development configuration
-app.config['DEBUG'] = True  # Enable debug mode
-app.config['ENV'] = 'development'  # Set environment to development
-app.secret_key = 'dev-secret-key-change-in-production'  # Required for session/flash messages
+app = Flask(__name__)
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+
+# Configure CORS
+CORS(app, resources={
+    r"/*": {
+        "origins": os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',')
+    }
+})
+
+# Configuration from environment variables
+app.config['DEBUG'] = os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
+app.config['ENV'] = os.getenv('FLASK_ENV', 'development')
+app.secret_key = os.getenv('SECRET_KEY', 'fallback-secret-key-change-in-production')
+
+# MongoDB configuration from environment variables
+mongodb_uri = os.getenv('MONGODB_URI', 'mongodb://localhost:27017/')
+database_name = os.getenv('DATABASE_NAME', 'eduplanner')
 
 # Connect to MongoDB
-client = MongoClient("mongodb://localhost:27017/")
-db = client.eduplanner  # Database Name
+client = MongoClient(mongodb_uri)
+db = client[database_name]  # Database Name
 users_collection = db.users  # Collection Name
+
+# Add CORS headers to all responses
+@app.after_request
+def after_request(response):
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Max-Age'] = '3600'
+    return response
+
+# Handle OPTIONS preflight requests
+@app.route('/slides/<filename>', methods=['OPTIONS'])
+def handle_preflight(filename):
+    response = jsonify({'message': 'OK'})
+    return response, 200
 
 # Signup Route
 @app.route("/signup", methods=["POST"])
@@ -91,402 +129,243 @@ def login():
             "message": "Invalid credentials"
         }), 401
 
-# Helper function to clean up extracted text content
-def clean_slide_content(content):
-    """Clean up and normalize extracted slide content."""
-    if not content or not isinstance(content, str):
-        return "No content available"
-    
-    # Remove excessive whitespace
-    content = ' '.join(content.split())
-    
-    # Cut off if it's too long
-    if len(content) > 3000:
-        return content[:3000] + "... (content truncated)"
-    
-    return content
+# Configure Gemini API from environment variables
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+if not GEMINI_API_KEY:
+    logger.error("GEMINI_API_KEY not found in environment variables!")
+    raise ValueError("GEMINI_API_KEY environment variable is required")
 
-def get_gemini_api_key():
-    return os.getenv("GEMINI_API_KEY")
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel('gemini-1.5-flash')
 
-def call_gemini_completion(prompt, max_tokens=256, temperature=0.7):
-    api_key = get_gemini_api_key()
-    if not api_key:
-        logger.error("Gemini API key not found")
-        return None, "Gemini API key not found. Please set GEMINI_API_KEY in .env."
-    
-    # Updated to use the latest API endpoint
-    url = f"https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent"
-    
-    headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {api_key}"  # Using Bearer token authentication
-    }
-    
-    payload = {
-        "contents": [{
-            "parts": [{
-                "text": prompt
-            }]
-        }],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens,
-            "temperature": temperature,
-            "topP": 1,
-            "topK": 1
-        }
-    }
-    
-    try:
-        logger.debug(f"Sending request to Gemini API with prompt length: {len(prompt)}")
-        logger.debug(f"Using API endpoint: {url}")
-        
-        response = requests.post(url, headers=headers, json=payload, timeout=60)
-        logger.debug(f"Response status code: {response.status_code}")
-        
-        if response.status_code == 200:
-            result = response.json()
-            try:
-                logger.debug(f"Gemini API response: {result}")
-                if (
-                    "candidates" in result and
-                    len(result["candidates"]) > 0 and
-                    "content" in result["candidates"][0] and
-                    "parts" in result["candidates"][0]["content"] and
-                    len(result["candidates"][0]["content"]["parts"]) > 0 and
-                    "text" in result["candidates"][0]["content"]["parts"][0]
-                ):
-                    return result["candidates"][0]["content"]["parts"][0]["text"], None
-                else:
-                    error_msg = f"Gemini API response missing expected fields: {result}"
-                    logger.error(error_msg)
-                    return None, error_msg
-            except Exception as ex:
-                error_msg = f"Error parsing Gemini API response: {ex}, response: {result}"
-                logger.error(error_msg)
-                return None, f"Unexpected response format from Gemini: {result}"
-        else:
-            try:
-                error_detail = response.json()
-                logger.error(f"Full API error response: {error_detail}")
-            except Exception:
-                error_detail = response.text
-                logger.error(f"Raw API error response: {error_detail}")
-            
-            error_msg = f"Gemini API error: {response.status_code}, details: {error_detail}"
-            logger.error(error_msg)
-            return None, error_msg
-    except Exception as e:
-        error_msg = f"Exception during Gemini API call: {e}"
-        logger.error(error_msg)
-        return None, error_msg
+# Upload configuration
+UPLOAD_FOLDER = 'uploads'
+ALLOWED_EXTENSIONS = {'pdf', 'png', 'jpg', 'jpeg', 'ppt', 'pptx'}
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
+# Create upload directory if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# Route for generating quiz questions
-@app.route("/generate-quiz", methods=["POST"])
-def generate_quiz():
-    logger.info("Received quiz generation request")
-    try:
-        # Validate file presence
-        if 'file' not in request.files:
-            logger.error("No file uploaded in the request")
-            return jsonify({"error": "No file uploaded"}), 400
-            
-        file = request.files['file']
-        
-        # Validate filename
-        if file.filename == '':
-            logger.error("Empty filename received")
-            return jsonify({"error": "No selected file"}), 400
-            
-        # Log file details
-        logger.info(f"Processing file: {file.filename}")
-        
-        try:
-            content = file.read().decode('utf-8', errors='ignore')
-            logger.info(f"Successfully read file content, size: {len(content)} bytes")
-        except Exception as read_error:
-            logger.error(f"Error reading file content: {str(read_error)}")
-            return jsonify({"error": f"Error reading file: {str(read_error)}"}), 400
-            
-        try:
-            slide_content = clean_slide_content(content)
-            logger.info("Successfully cleaned slide content")
-        except Exception as clean_error:
-            logger.error(f"Error cleaning slide content: {str(clean_error)}")
-            return jsonify({"error": f"Error processing content: {str(clean_error)}"}), 500
-            
-        # Generate quiz prompt
-        prompt = f"Generate 4 quiz questions (with no answers) based on the following content. Each question should be on a new line.\n{slide_content}"
-        logger.info("Calling Gemini API for quiz generation")
-        
-        quiz, error = call_gemini_completion(prompt, max_tokens=256)
-        
-        if error:
-            logger.error(f"Gemini API error: {error}")
-            return jsonify({
-                "error": error,
-                "details": "Failed to generate quiz using AI model"
-            }), 500
-            
-        if not quiz or not quiz.strip():
-            logger.error("Received empty quiz from Gemini API")
-            return jsonify({
-                "error": "Generated quiz is empty",
-                "details": "The AI model returned an empty response"
-            }), 500
-            
-        logger.info("Successfully generated quiz")
-        return jsonify({
-            "quiz": quiz,
-            "message": "Quiz generated successfully"
-        }), 200
-        
-    except Exception as e:
-        logger.exception("Unexpected error in generate_quiz endpoint")
-        return jsonify({
-            "error": str(e),
-            "details": "An unexpected error occurred while generating the quiz",
-            "type": type(e).__name__
-        }), 500
-
-# Route for generating summaries
-@app.route("/generate-summary", methods=["POST"])
-def generate_summary():
-    logger.info("Received summary generation request")
-    try:
-        # Validate file presence
-        if 'file' not in request.files:
-            logger.error("No file uploaded in the request")
-            return jsonify({"error": "No file uploaded"}), 400
-            
-        file = request.files['file']
-        
-        # Validate filename
-        if file.filename == '':
-            logger.error("Empty filename received")
-            return jsonify({"error": "No selected file"}), 400
-            
-        filename = file.filename.lower()
-        logger.info(f"Processing file for summary: {filename}")
-        
-        try:
-            if filename.endswith('.pdf'):
-                # Extract text from PDF
-                logger.info("Processing PDF file")
-                from io import BytesIO
-                pdf_reader = PdfReader(BytesIO(file.read()))
-                content = " ".join(page.extract_text() or "" for page in pdf_reader.pages)
-                logger.info(f"Successfully extracted text from PDF, size: {len(content)} bytes")
-            elif filename.endswith('.txt'):
-                logger.info("Processing TXT file")
-                content = file.read().decode('utf-8', errors='ignore')
-                logger.info(f"Successfully read TXT file, size: {len(content)} bytes")
-            else:
-                logger.error(f"Unsupported file type: {filename}")
-                return jsonify({"error": "Unsupported file type for summary generation. Please upload a PDF or TXT file."}), 400
-                
-            try:
-                slide_content = clean_slide_content(content)
-                logger.info("Successfully cleaned content")
-            except Exception as clean_error:
-                logger.error(f"Error cleaning content: {str(clean_error)}")
-                return jsonify({"error": f"Error processing content: {str(clean_error)}"}), 500
-                
-            prompt = f"Summarize the following content in a concise paragraph:\n{slide_content}"
-            logger.info("Calling Gemini API for summary generation")
-            
-            summary, error = call_gemini_completion(prompt, max_tokens=256)
-            
-            if error:
-                logger.error(f"Gemini API error: {error}")
-                return jsonify({
-                    "error": error,
-                    "details": "Failed to generate summary using AI model"
-                }), 500
-                
-            if not summary or not summary.strip():
-                logger.error("Received empty summary from Gemini API")
-                return jsonify({
-                    "error": "Generated summary is empty",
-                    "details": "The AI model returned an empty response"
-                }), 500
-                
-            logger.info("Successfully generated summary")
-            return jsonify({
-                "summary": summary,
-                "message": "Summary generated successfully"
-            }), 200
-            
-        except Exception as file_error:
-            logger.exception("Error processing file")
-            return jsonify({
-                "error": str(file_error),
-                "details": "Error occurred while processing the file",
-                "type": type(file_error).__name__
-            }), 500
-            
-    except Exception as e:
-        logger.exception("Unexpected error in generate_summary endpoint")
-        return jsonify({
-            "error": str(e),
-            "details": "An unexpected error occurred while generating the summary",
-            "type": type(e).__name__
-        }), 500
-
-# Route for fetching related resources
-@app.route("/fetch-resources", methods=["POST"])
-def fetch_resources():
-    try:
-        data = request.json
-        slides = data.get("slides", [])
-        
-        # Extract topics from slide names
-        topics = []
-        for slide in slides:
-            slide_name = slide.get("name", "").split('.')[0]
-            topics.append(slide_name)
-        
-        # Remove duplicates and limit to 5 topics
-        unique_topics = list(set(topics))[:5]
-        
-        # Generate resources based on topics
-        resources = []
-        
-        for topic in unique_topics:
-            # Add Wikipedia resource
-            resources.append({
-                "title": f"{topic} - Wikipedia",
-                "url": f"https://en.wikipedia.org/wiki/{topic.replace(' ', '_')}"
-            })
-            
-            # Add YouTube search
-            resources.append({
-                "title": f"{topic} - YouTube Tutorials",
-                "url": f"https://www.youtube.com/results?search_query={topic.replace(' ', '+')}+tutorial"
-            })
-            
-            # Add Google Scholar search
-            resources.append({
-                "title": f"{topic} - Academic Papers",
-                "url": f"https://scholar.google.com/scholar?q={topic.replace(' ', '+')}"
-            })
-            
-            # Add Khan Academy search
-            resources.append({
-                "title": f"{topic} - Khan Academy",
-                "url": f"https://www.khanacademy.org/search?page_search_query={topic.replace(' ', '+')}"
-            })
-        
-        # Remove any duplicates
-        unique_resources = []
-        urls = set()
-        
-        for resource in resources:
-            if resource["url"] not in urls:
-                unique_resources.append(resource)
-                urls.add(resource["url"])
-        
-        return jsonify({"resources": unique_resources[:10]}), 200  # Limit to 10 resources
-    
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    try:
-        app.run(
-            host='127.0.0.1',
-            port=5000,
-            debug=True,
-            use_reloader=True,
-            threaded=True  # Enable threading
-        )
-    except OSError as e:
-        if e.winerror == 10038:  # Windows socket error
-            logger.error("Windows socket error encountered. Restarting server without threading...")
-            app.run(
-                host='127.0.0.1',
-                port=5000,
-                debug=True,
-                use_reloader=False,  # Disable reloader
-                threaded=False  # Disable threading
-            )
-        else:
-            raise e
-
-
-def get_huggingface_api_key():
-    return os.getenv("HUGGINGFACE_API_KEY")
-
-def call_huggingface_summarization(text):
-    api_key = get_huggingface_api_key()
-    if not api_key:
-        return None, "Hugging Face API key not found. Please set HUGGINGFACE_API_KEY in .env."
-    headers = {"Authorization": f"Bearer {api_key}"}
-    payload = {"inputs": text}
-    response = requests.post(
-        "https://api-inference.huggingface.co/models/facebook/bart-large-cnn",
-        headers=headers,
-        json=payload,
-        timeout=60
-    )
-    if response.status_code == 200:
-        result = response.json()
-        if isinstance(result, list) and len(result) > 0 and "summary_text" in result[0]:
-            return result[0]["summary_text"], None
-        elif isinstance(result, dict) and "error" in result:
-            return None, result["error"]
-        else:
-            return None, "Unexpected response format from Hugging Face."
-    else:
-        return None, f"Hugging Face API error: {response.status_code}"
-
-
-
-
-
-
-UPLOAD_FOLDER = os.path.join(os.getcwd(), "uploaded_slides")
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
-ALLOWED_EXTENSIONS = {"pdf", "txt", "docx", "pptx", "png", "jpg", "jpeg"}
 def allowed_file(filename):
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
-@app.route("/upload-slide", methods=["POST"])
-def upload_slide():
+def extract_text_from_pdf(file_path):
+    """Extract text from PDF file"""
+    text = ""
+    try:
+        with open(file_path, 'rb') as file:
+            pdf_reader = PdfReader(file)
+            for page in pdf_reader.pages:
+                text += page.extract_text() + "\n"
+    except Exception as e:
+        print(f"Error extracting text from PDF: {e}")
+    return text
+
+def extract_text_from_image(file_path):
+    """Extract text from image using OCR"""
+    try:
+        image = Image.open(file_path)
+        text = pytesseract.image_to_string(image)
+        return text
+    except Exception as e:
+        print(f"Error extracting text from image: {e}")
+        return ""
+
+def extract_text_from_ppt(file_path):
+    """Extract text from PowerPoint file"""
+    try:
+        from pptx import Presentation
+        prs = Presentation(file_path)
+        text = ""
+        for slide in prs.slides:
+            for shape in slide.shapes:
+                if hasattr(shape, "text"):
+                    text += shape.text + "\n"
+        return text
+    except Exception as e:
+        print(f"Error extracting text from PowerPoint: {e}")
+        return ""
+
+def generate_summary(text):
+    """Generate summary using Gemini API"""
+    try:
+        prompt = f"""
+        Please provide a comprehensive summary of the following content from slides/presentation:
+        
+        {text}
+        
+        Please structure the summary with:
+        1. Main topic/title
+        2. Key points (bullet points)
+        3. Important details
+        4. Conclusion
+        
+        Make it clear and concise while covering all important information.
+        """
+        
+        response = model.generate_content(prompt)
+        return response.text
+    except Exception as e:
+        print(f"Error generating summary: {e}")
+        return "Error generating summary. Please try again."
+
+def generate_quiz(text):
+    """Generate quiz questions using Gemini API"""
+    try:
+        prompt = f"""
+        Based on the following content from slides/presentation, create a quiz with 5 multiple-choice questions:
+        
+        {text}
+        
+        Please format the response as JSON with the following structure:
+        {{
+            "questions": [
+                {{
+                    "question": "Question text here?",
+                    "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+                    "correct_answer": "A"
+                }}
+            ]
+        }}
+        
+        Make sure the questions test understanding of key concepts from the content.
+        """
+        
+        response = model.generate_content(prompt)
+        # Try to parse JSON from response
+        response_text = response.text.strip()
+        # Remove markdown code blocks if present
+        if response_text.startswith('```json'):
+            response_text = response_text[7:-3]
+        elif response_text.startswith('```'):
+            response_text = response_text[3:-3]
+        
+        quiz_data = json.loads(response_text)
+        return quiz_data
+    except Exception as e:
+        print(f"Error generating quiz: {e}")
+        # Return a fallback quiz structure
+        return {
+            "questions": [
+                {
+                    "question": "Error generating quiz questions. Please try uploading the file again.",
+                    "options": ["A) Try again", "B) Try again", "C) Try again", "D) Try again"],
+                    "correct_answer": "A"
+                }
+            ]
+        }
+
+@app.route('/')
+def index():
+    return jsonify({"message": "Slide Analyzer API is running!"})
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
     if 'file' not in request.files:
-        return jsonify({"error": "No file uploaded"}), 400
+        return jsonify({'error': 'No file uploaded'}), 400
+    
     file = request.files['file']
     if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+        return jsonify({'error': 'No file selected'}), 400
+    
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], filename)
-        file.save(save_path)
-        return jsonify({"message": "File uploaded successfully", "filename": filename}), 200
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        file.save(file_path)
+        
+        # Extract text based on file type
+        file_extension = filename.rsplit('.', 1)[1].lower()
+        
+        if file_extension == 'pdf':
+            extracted_text = extract_text_from_pdf(file_path)
+        elif file_extension in ['png', 'jpg', 'jpeg']:
+            extracted_text = extract_text_from_image(file_path)
+        elif file_extension in ['ppt', 'pptx']:
+            extracted_text = extract_text_from_ppt(file_path)
+        else:
+            return jsonify({'error': 'Unsupported file type'}), 400
+        
+        if not extracted_text.strip():
+            return jsonify({'error': 'No text could be extracted from the file'}), 400
+        
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'filename': filename,
+            'extracted_text': extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text
+        })
+    
+    return jsonify({'error': 'Invalid file type'}), 400
+
+@app.route('/generate-summary', methods=['POST'])
+def generate_summary_endpoint():
+    data = request.get_json()
+    
+    if not data or 'filename' not in data:
+        return jsonify({'error': 'Filename required'}), 400
+    
+    filename = data['filename']
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
+    if not os.path.exists(file_path):
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Extract text based on file type
+    file_extension = filename.rsplit('.', 1)[1].lower()
+    
+    if file_extension == 'pdf':
+        extracted_text = extract_text_from_pdf(file_path)
+    elif file_extension in ['png', 'jpg', 'jpeg']:
+        extracted_text = extract_text_from_image(file_path)
+    elif file_extension in ['ppt', 'pptx']:
+        extracted_text = extract_text_from_ppt(file_path)
     else:
-        return jsonify({"error": "File type not allowed"}), 400
+        return jsonify({'error': 'Unsupported file type'}), 400
+    
+    if not extracted_text.strip():
+        return jsonify({'error': 'No text could be extracted from the file'}), 400
+    
+    summary = generate_summary(extracted_text)
+    
+    return jsonify({
+        'summary': summary,
+        'filename': filename
+    })
 
-@app.route("/slides", methods=["GET"])
-def list_slides():
-    files = os.listdir(app.config["UPLOAD_FOLDER"])
-    return jsonify({"slides": files}), 200
-
-@app.route("/slides/<filename>", methods=["GET"])
-def read_slide(filename):
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(filename))
+@app.route('/generate-quiz', methods=['POST'])
+def generate_quiz_endpoint():
+    data = request.get_json()
+    
+    if not data or 'filename' not in data:
+        return jsonify({'error': 'Filename required'}), 400
+    
+    filename = data['filename']
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    
     if not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
-    with open(file_path, "rb") as f:
-        content = f.read()
-    return content, 200
+        return jsonify({'error': 'File not found'}), 404
+    
+    # Extract text based on file type
+    file_extension = filename.rsplit('.', 1)[1].lower()
+    
+    if file_extension == 'pdf':
+        extracted_text = extract_text_from_pdf(file_path)
+    elif file_extension in ['png', 'jpg', 'jpeg']:
+        extracted_text = extract_text_from_image(file_path)
+    elif file_extension in ['ppt', 'pptx']:
+        extracted_text = extract_text_from_ppt(file_path)
+    else:
+        return jsonify({'error': 'Unsupported file type'}), 400
+    
+    if not extracted_text.strip():
+        return jsonify({'error': 'No text could be extracted from the file'}), 400
+    
+    quiz_data = generate_quiz(extracted_text)
+    
+    return jsonify({
+        'quiz': quiz_data,
+        'filename': filename
+    })
 
-@app.route("/slides/<filename>", methods=["DELETE"])
-def delete_slide(filename):
-    file_path = os.path.join(app.config["UPLOAD_FOLDER"], secure_filename(filename))
-    if not os.path.exists(file_path):
-        return jsonify({"error": "File not found"}), 404
-    os.remove(file_path)
-    return jsonify({"message": "File deleted successfully"}), 200
+if __name__ == '__main__':
+    app.run(debug=True, port=5000)

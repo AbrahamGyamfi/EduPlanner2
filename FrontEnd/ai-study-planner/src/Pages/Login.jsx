@@ -47,6 +47,8 @@ const Login = ({ onLogin }) => {
         localStorage.setItem("firstname", data.user.firstname);
         localStorage.setItem("userId", data.user.id || data.user._id);
         localStorage.setItem("isLoggedIn", "true");
+        localStorage.setItem("isAuthenticated", "true");
+        localStorage.setItem("user", JSON.stringify(data.user));
         onLogin?.();
         navigate("/dashboard");
       } else {

@@ -1,1297 +1,1312 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-// Remove date-fns import and replace with native JavaScript date formatting
-// import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
-import Sidebar from '../components/sidebar';
-// import PageHeader from '../components/PageHeader';
-import Navbar from '../components/PageHead';
-import { 
-  Calendar,
-  Clock,
-  Brain,
-  Settings,
-  Save,
-  RefreshCw,
-  AlertCircle,
-  CheckCircle,
-  Plus,
-  Battery,
-  Sun,
-  Sunset,
-  Moon,
-  Undo,
-  BookOpen,
-  Coffee
-} from 'lucide-react';
-import { Toaster, toast } from 'react-hot-toast';
-
-// Predefined preference templates
-const PREFERENCE_TEMPLATES = {
-  balanced: {
-    name: 'Balanced',
-    icon: <BookOpen className="w-4 h-4" />,
-    preferences: {
-      preferredStudyTime: 'morning',
-      maxDailyHours: 6,
-      studySessionLength: 45,
-      breakDuration: 15,
-      weekendStudy: true,
-      energyLevels: {
-        morning: 8,
-        afternoon: 7,
-        evening: 6
-      }
-    }
-  },
-  intensive: {
-    name: 'Intensive',
-    icon: <Brain className="w-4 h-4" />,
-    preferences: {
-      preferredStudyTime: 'morning',
-      maxDailyHours: 8,
-      studySessionLength: 60,
-      breakDuration: 10,
-      weekendStudy: true,
-      energyLevels: {
-        morning: 9,
-        afternoon: 8,
-        evening: 7
-      }
-    }
-  },
-  relaxed: {
-    name: 'Relaxed',
-    icon: <Coffee className="w-4 h-4" />,
-    preferences: {
-      preferredStudyTime: 'afternoon',
-      maxDailyHours: 4,
-      studySessionLength: 30,
-      breakDuration: 20,
-      weekendStudy: false,
-      energyLevels: {
-        morning: 6,
-        afternoon: 8,
-        evening: 5
-      }
-    }
-  }
-};
+import React, { useState, useEffect } from "react";
+import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
+import { Zap, BookOpen, Clock, Brain, X, Loader, FileText, Calendar, Check, Search, List, Grid, Settings, TrendingUp, Target, Hourglass, Book, MoreHorizontal, Download, Edit2, Trash2, GripVertical } from "lucide-react";
 
 const Schedule = () => {
-  const navigate = useNavigate();
-  const [isLoading, setIsLoading] = useState(true);
-  
-  // Get courses from localStorage with better validation
-  const [courses, setCourses] = useState(() => {
-    try {
-      setIsLoading(true);
-      const savedCourses = localStorage.getItem('courses');
-      if (!savedCourses) {
-        toast.error('No courses found. Please add courses in the Courses page.');
-        return [];
-      }
-      const parsedCourses = JSON.parse(savedCourses);
-      if (!Array.isArray(parsedCourses)) {
-        console.error('Invalid courses data format');
-        toast.error('Error loading courses. Please try refreshing the page.');
-        return [];
-      }
-      
-      // Filter only valid, ongoing courses
-      const validCourses = parsedCourses.filter(course => 
-        course &&
-        course.id &&
-        course.name &&
-        typeof course.creditHours === 'number' &&
-        course.status === 'ongoing'
-      );
-      
-      if (validCourses.length === 0) {
-        if (parsedCourses.length > 0) {
-          toast.error('No ongoing courses found. Please mark at least one course as ongoing in the Courses page.');
-        } else {
-          toast.error('No courses found. Please add courses in the Courses page.');
-        }
-      } else {
-        toast.success(`Found ${validCourses.length} ongoing courses`);
-      }
-      
-      return validCourses;
-    } catch (error) {
-      console.error('Error loading courses:', error);
-      toast.error('Error loading courses. Please try refreshing the page.');
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
+  const [currentStep, setCurrentStep] = useState(0); // 0: overview, 1: courses, 2: times, 3: styles, 4: generated
+  const [preferences, setPreferences] = useState({
+    selectedCourses: [],
+    studyDuration: 60,
+    studyDaysPerWeek: 5,
+    learningTimes: [],
+    learningStyles: [],
   });
+  const [availableCourses, setAvailableCourses] = useState([]);
+  const [generatedSchedule, setGeneratedSchedule] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedFilter, setSelectedFilter] = useState('all'); // New state for filters
+  const [viewMode, setViewMode] = useState('list'); // Changed default view mode to 'list'
+  const [currentDate, setCurrentDate] = useState(new Date()); // State for current date for calendar navigation
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingSession, setEditingSession] = useState(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState('json');
 
-  // Watch for changes in courses from other components
+  // Define colors for course cards
+  const courseColors = ['#EF4444', '#3B82F6', '#22C55E', '#F97316', '#A855F7', '#06B6D4'];
+
+  // Define timeSlots and learningStyles here so they are accessible for mapping
+  const timeSlots = [
+    { id: 'early-morning', label: 'Early Morning', time: '6:00 - 8:00 AM', icon: '🌅' },
+    { id: 'morning', label: 'Morning', time: '8:00 - 12:00 PM', icon: '☀️' },
+    { id: 'afternoon', label: 'Afternoon', time: '12:00 - 5:00 PM', icon: '🌤️' },
+    { id: 'evening', label: 'Evening', time: '5:00 - 8:00 PM', icon: '🌆' },
+    { id: 'night', label: 'Night', time: '8:00 - 11:00 PM', icon: '🌙' },
+  ];
+
+  const learningStyles = [
+    { id: 'visual', label: 'Visual', description: 'Learn through diagrams and visual aids', icon: '👁️' },
+    { id: 'auditory', label: 'Auditory', description: 'Learn through listening', icon: '🎧' },
+    { id: 'kinesthetic', label: 'Hands-on', description: 'Learn through practice', icon: '🖐️' },
+    { id: 'reading-writing', label: 'Reading/Writing', description: 'Learn through text', icon: '📖' },
+    { id: 'group-study', label: 'Group Study', description: 'Learn with others', icon: '👥' },
+    { id: 'problem-solving', label: 'Problem Solving', description: 'Learn through reasoning', icon: '🎯' },
+  ];
+
   useEffect(() => {
-    const handleStorageChange = (e) => {
-      if (e.key === 'courses') {
-        try {
-          setIsLoading(true);
-          const updatedCourses = JSON.parse(e.newValue);
-          if (Array.isArray(updatedCourses)) {
-            // Filter only valid, ongoing courses when updating
-            const validCourses = updatedCourses.filter(course => 
-              course &&
-              course.id &&
-              course.name &&
-              typeof course.creditHours === 'number' &&
-              course.status === 'ongoing'
-            );
-            setCourses(validCourses);
-            
-            if (validCourses.length === 0) {
-              if (updatedCourses.length > 0) {
-                toast.error('No ongoing courses found. Please mark at least one course as ongoing in the Courses page.');
-              } else {
-                toast.error('No courses found. Please add courses in the Courses page.');
-              }
-            } else {
-              toast.success(`Found ${validCourses.length} ongoing courses`);
-            }
-          }
-        } catch (error) {
-          console.error('Error parsing updated courses:', error);
-          toast.error('Error updating courses. Please try refreshing the page.');
-        } finally {
-          setIsLoading(false);
-        }
+    // Load available courses from localStorage
+    const savedCourses = localStorage.getItem('courses');
+    if (savedCourses) {
+      try {
+        setAvailableCourses(JSON.parse(savedCourses));
+      } catch (e) {
+        console.error("Failed to parse courses from localStorage", e);
+        setAvailableCourses([]);
       }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    }
   }, []);
 
-  // State variables for task management
-  const [tasks, setTasks] = useState(() => {
-    const savedTasks = localStorage.getItem('scheduledTasks');
-    return savedTasks ? JSON.parse(savedTasks) : [];
-  });
-  const [newTask, setNewTask] = useState({
-    id: Date.now(),
-    title: '',
-    course: '',
-    description: '',
-    scheduledDate: new Date().toISOString(),
-    duration: 60, // minutes
-    priority: 'medium'
-  });
-  const [showForm, setShowForm] = useState(false);
-  const [selectedDay, setSelectedDay] = useState(new Date());
-  const [viewMode, setViewMode] = useState('week'); // 'day', 'week', or 'month'
-  
-  // Calculate the current week's days for the calendar view
-  const weekDays = Array.from({ length: 7 }).map((_, i) => {
-    const start = getStartOfWeek(new Date());
-    const day = new Date(start);
-    day.setDate(day.getDate() + i);
-    return day;
-  });
+  const handleGenerateSchedule = () => {
+    if (preferences.selectedCourses.length === 0) {
+      setError("Please select at least one course to generate a schedule.");
+      return;
+    }
+    if (preferences.learningTimes.length === 0) {
+      setError("Please select at least one preferred study time.");
+      return;
+    }
+    if (preferences.learningStyles.length === 0) {
+      setError("Please select at least one learning style.");
+      return;
+    }
 
-  // Native JS implementation of date-fns functions
-  function getStartOfWeek(date) {
-    const d = new Date(date);
-    const day = d.getDay(); // 0 is Sunday, 1 is Monday
-    // Set to Monday of the current week
-    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-    d.setDate(diff);
-    return d;
-  }
+    setIsLoading(true);
+    setError(null);
+    setGeneratedSchedule([]);
 
-  function isSameDay(date1, date2) {
-    return date1.getDate() === date2.getDate() && 
-           date1.getMonth() === date2.getMonth() && 
-           date1.getFullYear() === date2.getFullYear();
-  }
+    setTimeout(() => {
+      const newSchedule = [];
+      const selectedCourseObjects = availableCourses.filter(course =>
+        preferences.selectedCourses.includes(course.id)
+      );
 
-  function formatDate(date, format) {
-    const d = new Date(date);
-    
-    // Format month names
-    if (format.includes('MMMM')) {
-      const monthNames = ["January", "February", "March", "April", "May", "June", "July", 
-                         "August", "September", "October", "November", "December"];
-      format = format.replace('MMMM', monthNames[d.getMonth()]);
-    }
-    
-    // Format day of week
-    if (format.includes('EEEE')) {
-      const dayNames = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-      format = format.replace('EEEE', dayNames[d.getDay()]);
-    }
-    
-    // Format short day of week
-    if (format.includes('EEE')) {
-      const shortDayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-      format = format.replace('EEE', shortDayNames[d.getDay()]);
-    }
-    
-    // Format year
-    if (format.includes('yyyy')) {
-      format = format.replace('yyyy', d.getFullYear());
-    }
-    
-    // Format day of month
-    if (format.includes('d')) {
-      format = format.replace('d', d.getDate());
-    }
-    
-    return format;
-  }
-
-  // Format time from date string
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    let hours = date.getHours();
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12;
-    hours = hours ? hours : 12; // the hour '0' should be '12'
-    return `${hours}:${minutes} ${ampm}`;
-  };
-  
-  // Calculate task statistics with more robust error checking
-  const getTaskStats = () => {
-    try {
-      if (!Array.isArray(tasks)) {
-        return { total: 0, completed: 0, high: 0, completionRate: 0 };
+      if (selectedCourseObjects.length === 0) {
+        setError("No valid courses selected. Please ensure your selected courses exist.");
+        setIsLoading(false);
+        return;
       }
-      
-      const total = tasks.length;
-      // Handle missing 'completed' property safely
-      const completed = tasks.filter(task => task && task.completed === true).length;
-      // Handle missing 'priority' property safely
-      const high = tasks.filter(task => task && task.priority === 'high').length;
-      
-      return {
-        total,
-        completed,
-        high,
-        completionRate: total ? Math.round((completed / total) * 100) : 0
+
+      const activityMapping = {
+        visual: ["Watch video lectures for {courseName}", "Create mind maps for {courseName}", "Review diagrams for {courseName}"],
+        auditory: ["Listen to recordings for {courseName}", "Attend lectures for {courseName}", "Discuss concepts from {courseName}"],
+        kinesthetic: ["Practice problems for {courseName}", "Lab work for {courseName}", "Build projects for {courseName}"],
+        "reading-writing": ["Read textbooks for {courseName}", "Review notes for {courseName}", "Write summaries for {courseName}"],
+        "group-study": ["Group study for {courseName}", "Peer teaching for {courseName}", "Study groups for {courseName}"],
+        "problem-solving": ["Solve problems from {courseName}", "Analyze cases for {courseName}", "Apply concepts from {courseName}"],
       };
-    } catch (error) {
-      console.error("Error calculating task stats:", error);
-      return { total: 0, completed: 0, high: 0, completionRate: 0 };
-    }
+
+      // Determine the start and end dates for generation based on the current calendar month
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      startOfMonth.setHours(0, 0, 0, 0); // Normalize to start of day
+
+      const courseDistributionTracker = new Map(); // Map<courseId, Set<dateString>>
+
+      const numWeeksToGenerate = 4; // Generate schedule for 4 weeks to ensure coverage
+      for (let week = 0; week < numWeeksToGenerate; week++) {
+          const startOfWeek = new Date(startOfMonth);
+          startOfWeek.setDate(startOfMonth.getDate() + (week * 7)); // Move to the start of the current week
+
+          const daysInThisWeek = [];
+          for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+              const day = new Date(startOfWeek);
+              day.setDate(startOfWeek.getDate() + dayOffset);
+              // Only consider days within the current month for generation to avoid spillover
+              if (day.getMonth() === currentDate.getMonth() && day.getFullYear() === currentDate.getFullYear()) {
+                  daysInThisWeek.push(day);
+              }
+          }
+
+          // Shuffle days of the week to pick `preferences.studyDaysPerWeek` randomly
+          const shuffledDaysInWeek = [...daysInThisWeek].sort(() => 0.5 - Math.random());
+          const daysToScheduleThisWeek = shuffledDaysInWeek.slice(0, preferences.studyDaysPerWeek);
+
+          for (const studyDate of daysToScheduleThisWeek) {
+              // Cycle through courses for each study day
+              const course = selectedCourseObjects[Math.floor(Math.random() * selectedCourseObjects.length)];
+              if (!course) continue; // Should not happen if selectedCourseObjects > 0
+
+              // Prevent duplicates of the same course on the same date
+              if (!courseDistributionTracker.has(course.id)) {
+                  courseDistributionTracker.set(course.id, new Set());
+              }
+              if (courseDistributionTracker.get(course.id).has(studyDate.toDateString())) {
+                  continue;
+              }
+
+              const randomTimeSlot = preferences.learningTimes[Math.floor(Math.random() * preferences.learningTimes.length)];
+              const randomLearningStyle = preferences.learningStyles[Math.floor(Math.random() * preferences.learningStyles.length)];
+
+              const possibleActivities = activityMapping[randomLearningStyle] || [];
+              const activityTemplate = possibleActivities[Math.floor(Math.random() * possibleActivities.length)] || "Study for {courseName}";
+              const courseName = course.name || course.title || 'Unnamed Course';
+              const activity = activityTemplate.replace(/{courseName}/g, courseName);
+
+              const priority = Math.random() < 0.3 ? 'high' : 'normal';
+
+              newSchedule.push({
+                  fullDate: studyDate,
+                  day: studyDate.getDay() === 0 ? 7 : studyDate.getDay(), // Normalized day of week (1-7)
+                  courseId: course.id,
+                  courseName: courseName,
+                  courseCode: course.code,
+                  courseColor: courseColors[availableCourses.findIndex(c => c.id === course.id) % courseColors.length],
+                  timeSlot: timeSlots.find(slot => slot.id === randomTimeSlot)?.time || 'Anytime',
+                  duration: preferences.studyDuration,
+                  learningStyle: randomLearningStyle,
+                  activity: activity,
+                  priority: priority,
+              });
+              courseDistributionTracker.get(course.id).add(studyDate.toDateString());
+          }
+      }
+
+      setGeneratedSchedule(newSchedule);
+      setIsLoading(false);
+      setCurrentStep(4); // Move to generated schedule display
+      setViewMode('calendar'); // Immediately show the calendar view after schedule generation
+    }, 2000);
   };
 
-  // Save tasks to localStorage when they change
-  useEffect(() => {
-    // Add try-catch to handle potential localStorage errors
-    try {
-      localStorage.setItem('scheduledTasks', JSON.stringify(tasks));
-    } catch (error) {
-      console.error("Error saving tasks to localStorage:", error);
-    }
-  }, [tasks]);
+  const handleEditSession = (session) => {
+    setEditingSession(session);
+    setIsEditMode(true);
+  };
 
-  // Handle form input change
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setNewTask(prev => ({
+  const handleDeleteSession = (sessionId) => {
+    setGeneratedSchedule(prev => prev.filter(session => session.id !== sessionId));
+  };
+
+  const handleUpdateSession = (updatedSession) => {
+    setGeneratedSchedule(prev => 
+      prev.map(session => 
+        session.id === updatedSession.id ? updatedSession : session
+      )
+    );
+    setIsEditMode(false);
+    setEditingSession(null);
+  };
+
+  const handleExportSchedule = () => {
+    setIsExportModalOpen(true);
+  };
+
+  const exportSchedule = () => {
+    const data = generatedSchedule.map(session => ({
+      ...session,
+      fullDate: session.fullDate.toISOString(),
+    }));
+
+    let content;
+    let mimeType;
+    let fileExtension;
+
+    switch (exportFormat) {
+      case 'json':
+        content = JSON.stringify(data, null, 2);
+        mimeType = 'application/json';
+        fileExtension = 'json';
+        break;
+      case 'csv':
+        const headers = ['Date', 'Course', 'Time', 'Duration', 'Activity', 'Priority'];
+        const csvRows = [
+          headers,
+          ...data.map(session => [
+            new Date(session.fullDate).toLocaleDateString(),
+            session.courseName,
+            session.timeSlot,
+            `${session.duration} minutes`,
+            session.activity,
+            session.priority
+          ])
+        ];
+        content = csvRows.map(row => row.join(',')).join('\n');
+        mimeType = 'text/csv';
+        fileExtension = 'csv';
+        break;
+      case 'ical':
+        // Basic iCal format
+        const icalEvents = data.map(session => {
+          const startDate = new Date(session.fullDate);
+          const endDate = new Date(startDate.getTime() + session.duration * 60000);
+          
+          return `BEGIN:VEVENT
+DTSTART:${startDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z
+DTEND:${endDate.toISOString().replace(/[-:]/g, '').split('.')[0]}Z
+SUMMARY:${session.courseName} - ${session.activity}
+DESCRIPTION:${session.learningStyle} - ${session.timeSlot}
+PRIORITY:${session.priority}
+END:VEVENT`;
+        }).join('\n');
+
+        content = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//StudyPlanner//Schedule
+${icalEvents}
+END:VCALENDAR`;
+        mimeType = 'text/calendar';
+        fileExtension = 'ics';
+        break;
+      default:
+        return;
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `study_schedule.${fileExtension}`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    setIsExportModalOpen(false);
+  };
+
+  const handleGenerateClick = () => {
+    setCurrentStep(1); // Move to Step 1: Course Selection
+  };
+
+  const handleCloseWizard = () => {
+    setCurrentStep(0); // Go back to overview
+    setPreferences({
+      selectedCourses: [],
+      studyDuration: 60,
+      studyDaysPerWeek: 5,
+      learningTimes: [],
+      learningStyles: [],
+    });
+    setGeneratedSchedule([]);
+    setError(null);
+  };
+
+  const handleNextStep = () => {
+    if (currentStep === 1) {
+      if (preferences.selectedCourses.length === 0) {
+        setError("Please select at least one course.");
+        return;
+      }
+    } else if (currentStep === 2) {
+      if (preferences.learningTimes.length === 0) {
+        setError("Please select at least one preferred study time.");
+        return;
+      }
+    } else if (currentStep === 3) {
+      if (preferences.learningStyles.length === 0) {
+        setError("Please select at least one learning style.");
+        return;
+      }
+    }
+    setError(null);
+    setCurrentStep(prev => prev + 1);
+  };
+
+  const handlePrevStep = () => {
+    setError(null);
+    setCurrentStep(prev => prev - 1);
+  };
+
+  const handleCourseToggle = (courseId) => {
+    setPreferences(prev => ({
       ...prev,
-      [name]: value
+      selectedCourses: prev.selectedCourses.includes(courseId)
+        ? prev.selectedCourses.filter(id => id !== courseId)
+        : [...prev.selectedCourses, courseId]
     }));
   };
 
-  // Create a notification when task is added
-  const createTaskNotification = (task) => {
-    try {
-      // Get existing activities
-      const savedActivities = localStorage.getItem('userActivities');
-      const activities = savedActivities ? JSON.parse(savedActivities) : [];
-      
-      // Create new notification
-      const newActivity = {
-        id: Date.now(),
-        type: "task_created",
-        message: `New task scheduled: ${task.title}`,
-        timestamp: new Date().toISOString(),
-        read: false
-      };
-      
-      // Add to activities
-      const updatedActivities = [newActivity, ...activities];
-      localStorage.setItem('userActivities', JSON.stringify(updatedActivities));
-    } catch (error) {
-      console.error("Error creating notification:", error);
-    }
+  const handleStudyDurationChange = (e) => {
+    const value = parseInt(e.target.value);
+    setPreferences(prev => ({
+      ...prev,
+      studyDuration: isNaN(value) ? 60 : value,
+    }));
   };
 
-  // Handle task creation with improved Dashboard sync
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Create the new task
-    const taskToAdd = {
-      ...newTask,
-      // Ensure we have all required properties that Dashboard expects
-      id: Date.now(),
-      // If course field is empty, set it to "General" for better display
-      course: newTask.course || "General" 
-    };
-    
-    // Add to tasks state
-    setTasks(prevTasks => {
-      const updatedTasks = [...prevTasks, taskToAdd];
-      
-      // Save to localStorage for Dashboard to access
-      localStorage.setItem('scheduledTasks', JSON.stringify(updatedTasks));
-      
-      // Create notification about new task
-      createTaskNotification(taskToAdd);
-      
-      return updatedTasks;
-    });
-    
-    // Reset form
-    setNewTask({
-      id: Date.now() + 1, // Ensure unique ID
-      title: '',
-      course: '',
-      description: '',
-      scheduledDate: new Date().toISOString(),
-      duration: 60,
-      priority: 'medium'
-    });
-    setShowForm(false);
+  const handleStudyDaysPerWeekChange = (e) => {
+    const value = parseInt(e.target.value);
+    setPreferences(prev => ({
+      ...prev,
+      studyDaysPerWeek: isNaN(value) ? 5 : Math.max(1, Math.min(7, value)),
+    }));
   };
-  
-  // Get tasks for selected day
-  const getTasksForDay = (day) => {
-    return tasks.filter(task => {
-      const taskDate = new Date(task.scheduledDate);
-      return isSameDay(taskDate, day);
+
+  const getProgressPercentage = () => {
+    if (currentStep === 0) return 0;
+    if (currentStep === 4) return 100;
+    return Math.floor(((currentStep - 1) / 3) * 100);
+  };
+
+  const getFilteredSchedule = () => {
+    // Original filter logic remains, but now applies to sessions with fullDate
+    let filtered = generatedSchedule;
+    if (selectedFilter === 'high') return filtered.filter(session => session.priority === 'high');
+    if (selectedFilter === 'normal') return filtered.filter(session => session.priority === 'normal');
+    return filtered; // 'all' or other unknown filters return all
+  };
+
+  const getMonthAndYear = (date) => {
+    return date.toLocaleString('default', { month: 'long', year: 'numeric' });
+  };
+
+  const getDaysInMonth = (year, month) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (year, month) => {
+    // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    const day = new Date(year, month, 1).getDay();
+    return day === 0 ? 6 : day - 1; // Adjust so Monday is 0, Sunday is 6
+  };
+
+  const navigateMonth = (direction) => {
+    setCurrentDate(prevDate => {
+      const newDate = new Date(prevDate);
+      newDate.setMonth(prevDate.getMonth() + direction);
+      return newDate;
     });
   };
 
-  // Delete a task with Dashboard sync
-  const handleDeleteTask = (taskId) => {
-    setTasks(prevTasks => {
-      const updatedTasks = prevTasks.filter(task => task.id !== taskId);
-      
-      // Update localStorage to reflect deletion for Dashboard
-      localStorage.setItem('scheduledTasks', JSON.stringify(updatedTasks));
-      
-      return updatedTasks;
-    });
+  const goToToday = () => {
+    setCurrentDate(new Date());
   };
 
-  // Helper function to group tasks by hour for day view
-  const getTasksByHour = () => {
-    try {
-      const tasksForDay = getTasksForDay(selectedDay);
-      const groupedTasks = {};
-      
-      // Initialize hours (8 AM to 9 PM)
-      for (let i = 8; i <= 21; i++) {
-        groupedTasks[i] = [];
-      }
-      
-      // Safely group tasks by start hour
-      if (Array.isArray(tasksForDay)) {
-        tasksForDay.forEach(task => {
-          try {
-            if (task && task.scheduledDate) {
-              const taskDate = new Date(task.scheduledDate);
-              const hour = taskDate.getHours();
-              
-              // Only add to hours we're displaying
-              if (hour >= 8 && hour <= 21) {
-                groupedTasks[hour].push(task);
-              }
-            }
-          } catch (err) {
-            console.error("Error processing task in getTasksByHour:", err);
-          }
-        });
-      }
-      
-      return groupedTasks;
-    } catch (error) {
-      console.error("Error in getTasksByHour:", error);
-      // Return empty default object
-      const emptyGroups = {};
-      for (let i = 8; i <= 21; i++) {
-        emptyGroups[i] = [];
-      }
-      return emptyGroups;
+  const handleDragEnd = (result) => {
+    if (!result.destination) return;
+
+    const { source, destination } = result;
+    const sourceDate = source.droppableId;
+    const destDate = destination.droppableId;
+
+    // Create a copy of the schedule
+    const newSchedule = [...generatedSchedule];
+
+    // Find the session being dragged
+    const [movedSession] = newSchedule.splice(source.index, 1);
+
+    // Update the date if moving to a different day
+    if (sourceDate !== destDate) {
+      const newDate = new Date(destDate);
+      movedSession.fullDate = newDate;
     }
+
+    // Insert the session at the new position
+    newSchedule.splice(destination.index, 0, movedSession);
+
+    // Update the schedule
+    setGeneratedSchedule(newSchedule);
   };
 
-  // State for user preferences with validation
-  const [preferences, setPreferences] = useState(() => {
-    try {
-      const savedPrefs = localStorage.getItem('studyPreferences');
-      return savedPrefs ? JSON.parse(savedPrefs) : {
-        preferredStudyTime: 'morning',
-        maxDailyHours: 4,
-        studySessionLength: 45,
-        breakDuration: 15,
-        weekendStudy: true,
-        energyLevels: {
-          morning: 8,
-          afternoon: 6,
-          evening: 4
-        }
-      };
-    } catch (error) {
-      console.error('Error loading preferences:', error);
-      return {
-        preferredStudyTime: 'morning',
-        maxDailyHours: 4,
-        studySessionLength: 45,
-        breakDuration: 15,
-        weekendStudy: true,
-        energyLevels: {
-          morning: 8,
-          afternoon: 6,
-          evening: 4
-        }
-      };
+  const renderContent = () => {
+    const progress = getProgressPercentage();
+    const filteredSchedule = getFilteredSchedule();
+
+    // Calendar specific calculations
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const daysInMonth = getDaysInMonth(year, month);
+    const firstDayIndex = getFirstDayOfMonth(year, month); // 0 for Monday
+
+    const calendarDays = [];
+    // Add empty slots for days before the 1st of the month
+    for (let i = 0; i < firstDayIndex; i++) {
+      calendarDays.push(null);
     }
-  });
-
-  // Generated schedule state
-  const [schedule, setSchedule] = useState(() => {
-    try {
-      const saved = localStorage.getItem('generatedSchedule');
-      return saved ? JSON.parse(saved) : [];
-    } catch (error) {
-      console.error('Error loading schedule:', error);
-      return [];
+    // Add days of the current month
+    for (let i = 1; i <= daysInMonth; i++) {
+      calendarDays.push(new Date(year, month, i));
     }
-  });
 
-  // UI state
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [showPreferences, setShowPreferences] = useState(false);
-  const [error, setError] = useState(null);
-
-  // Add new state for preferences history and unsaved changes
-  const [preferencesHistory, setPreferencesHistory] = useState([]);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [isDragging, setIsDragging] = useState(false);
-  const [activeSection, setActiveSection] = useState('time');
-
-  // Enhanced error handling for preference changes
-  const handlePreferenceChange = useCallback((key, value) => {
-    try {
-      setHasUnsavedChanges(true);
-      if (key.includes('.')) {
-        const [parent, child] = key.split('.');
-        setPreferences(prev => ({
-          ...prev,
-          [parent]: {
-            ...prev[parent],
-            [child]: value
-          }
-        }));
-      } else {
-        setPreferences(prev => ({
-          ...prev,
-          [key]: value
-        }));
-      }
-    } catch (error) {
-      console.error('Error updating preference:', error);
-      toast.error('Failed to update preference');
-    }
-  }, []);
-
-  // Safe template application
-  const applyTemplate = useCallback((template) => {
-    try {
-      if (!PREFERENCE_TEMPLATES[template]) {
-        throw new Error('Invalid template selected');
-      }
-
-      if (hasUnsavedChanges) {
-        if (!window.confirm('You have unsaved changes. Apply template anyway?')) {
-          return;
-        }
-      }
-
-      setPreferences(PREFERENCE_TEMPLATES[template].preferences);
-      setHasUnsavedChanges(true);
-      toast.success(`Applied ${PREFERENCE_TEMPLATES[template].name} template`);
-    } catch (error) {
-      console.error('Error applying template:', error);
-      toast.error(error.message || 'Failed to apply template');
-    }
-  }, [hasUnsavedChanges]);
-
-  // Save preferences with validation and history
-  const savePreferences = useCallback(() => {
-    try {
-      // Validate preferences before saving
-      if (preferences.maxDailyHours < 1 || preferences.maxDailyHours > 12) {
-        throw new Error('Daily study hours must be between 1 and 12');
-      }
-      if (preferences.studySessionLength < 15 || preferences.studySessionLength > 120) {
-        throw new Error('Study session length must be between 15 and 120 minutes');
-      }
-
-      // Save current preferences to history
-      setPreferencesHistory(prev => [preferences, ...prev.slice(0, 9)]);
+    const sessionsByDay = filteredSchedule.reduce((acc, session) => {
+      // Ensure session.fullDate is a Date object; if it's a string, convert it
+      const sessionDate = session.fullDate instanceof Date ? session.fullDate : new Date(session.fullDate);
       
-      // Save to localStorage
-      localStorage.setItem('studyPreferences', JSON.stringify(preferences));
+      // Filter for sessions that fall within the current month displayed by the calendar
+      if (sessionDate.getFullYear() === year && sessionDate.getMonth() === month) {
+        const dayKey = sessionDate.toDateString(); // Keep toDateString for consistent key, but ensure filtering by year/month
+        if (!acc[dayKey]) {
+          acc[dayKey] = [];
+        }
+        acc[dayKey].push(session);
+      }
+      return acc;
+    }, {});
+
+    // Get unique sorted days from generated schedule for list view
+    const uniqueDays = Array.from(new Set(filteredSchedule.map(session => session.fullDate.toDateString())))
+      .map(dateString => new Date(dateString))
+      .sort((a, b) => a.getTime() - b.getTime());
       
-      setHasUnsavedChanges(false);
-      toast.success('Preferences saved successfully');
-      setShowPreferences(false);
-    } catch (error) {
-      console.error('Error saving preferences:', error);
-      toast.error(error.message || 'Failed to save preferences');
-    }
-  }, [preferences]);
+    const daysOfWeekNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-  // Undo last preference change
-  const undoPreferenceChange = useCallback(() => {
-    try {
-      if (preferencesHistory.length > 0) {
-        const [lastPreferences, ...remainingHistory] = preferencesHistory;
-        setPreferences(lastPreferences);
-        setPreferencesHistory(remainingHistory);
-        toast.success('Last change undone');
-      }
-    } catch (error) {
-      console.error('Error undoing change:', error);
-      toast.error('Failed to undo last change');
-    }
-  }, [preferencesHistory]);
+    switch (currentStep) {
+      case 0:
+        return (
+          <div className="flex flex-col items-center justify-center text-center py-20">
+            <div className="p-6 bg-blue-100 rounded-full mb-8 transform hover:scale-105 transition-transform duration-300">
+              <Calendar className="w-16 h-16 text-blue-600" />
+            </div>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4 animate-fade-in">Ready to Get Organized?</h2>
+            <p className="text-gray-700 max-w-2xl mx-auto mb-10 animate-fade-in-delay">
+              Create your personalized study schedule with our AI-powered generator. Choose your courses, learning
+              preferences, and optimal study times.
+            </p>
+            <button
+              onClick={handleGenerateClick}
+              className="px-10 py-4 bg-blue-600 text-white font-semibold rounded-lg shadow-lg hover:bg-blue-700 hover:shadow-xl transform hover:-translate-y-0.5 transition-all duration-300 flex items-center space-x-2 group"
+            >
+              <Zap className="w-5 h-5 group-hover:rotate-12 transition-transform duration-300" />
+              <span>Generate My Schedule</span>
+            </button>
+          </div>
+        );
+      case 1:
+        return (
+          <div className="min-h-[400px] flex flex-col animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Generate Study Schedule - Step 1 of 3</h2>
+              <button 
+                onClick={handleCloseWizard} 
+                className="text-gray-500 hover:text-gray-700 focus:outline-none transform hover:rotate-90 transition-transform duration-300"
+              >
+                <X className="w-7 h-7" />
+              </button>
+            </div>
 
-  // Save schedule with error handling
-  const saveSchedule = useCallback((newSchedule) => {
-    try {
-      if (!Array.isArray(newSchedule)) {
-        throw new Error('Invalid schedule format');
-      }
-      
-      localStorage.setItem('generatedSchedule', JSON.stringify(newSchedule));
-      setSchedule(newSchedule);
-      setError(null);
-      toast.success('Schedule saved successfully');
-    } catch (error) {
-      console.error('Error saving schedule:', error);
-      setError('Failed to save schedule. Please try again.');
-      toast.error('Failed to save schedule');
-    }
-  }, []);
+            <div className="flex flex-col items-center text-center mb-8">
+              <div className="p-4 bg-blue-100 rounded-full mb-4 transform hover:scale-105 transition-transform duration-300">
+                <BookOpen className="w-9 h-9 text-blue-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">Select Your Courses</h3>
+              <p className="text-gray-700">Choose from your registered courses</p>
+            </div>
 
-  // Enhanced schedule generation with better validation
-  const generateOptimalSchedule = useCallback(() => {
-    try {
-      setIsGenerating(true);
-      setError(null);
+            {error && (
+              <div className="animate-shake">
+                <p className="text-red-500 text-center mb-6 text-base font-medium">{error}</p>
+              </div>
+            )}
 
-      // Get courses from localStorage with detailed validation
-      const savedCourses = localStorage.getItem('courses');
-      if (!savedCourses) {
-        throw new Error('No courses found. Please add some courses in the Courses page.');
-      }
+            {availableCourses.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                {availableCourses.map((course, index) => {
+                  const isSelected = preferences.selectedCourses.includes(course.id);
+                  const colorIndex = index % courseColors.length;
+                  const courseColor = courseColors[colorIndex];
 
-      let parsedCourses;
-      try {
-        parsedCourses = JSON.parse(savedCourses);
-      } catch (e) {
-        throw new Error('Error reading courses data. Please try refreshing the page.');
-      }
+                  return (
+                    <div
+                      key={course.id}
+                      className={`relative p-5 border rounded-xl cursor-pointer transition-all duration-300 transform hover:-translate-y-1
+                        ${isSelected 
+                          ? 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-200' 
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-md'}`}
+                      onClick={() => handleCourseToggle(course.id)}
+                    >
+                      <div className="flex items-center justify-between space-x-3 mb-2">
+                        <div className="flex items-center space-x-3">
+                          <span className="w-3 h-3 rounded-full" style={{ backgroundColor: courseColor }}></span>
+                          <h4 className="text-lg font-semibold text-gray-800">{course.name || course.title || 'Unnamed Course'}</h4>
+                        </div>
+                        {isSelected && (
+                          <div className="transform scale-0 group-hover:scale-100 transition-transform duration-300">
+                            <Check className="w-6 h-6 text-blue-600" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-700">{course.code} &bull; {course.creditHours} credits</p>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-center text-gray-600 mb-8">No courses available. Please add courses to your profile first.</p>
+            )}
 
-      if (!Array.isArray(parsedCourses)) {
-        throw new Error('Invalid courses data format. Please try refreshing the page.');
-      }
-
-      if (parsedCourses.length === 0) {
-        throw new Error('No courses found. Please add some courses in the Courses page.');
-      }
-
-      // Get ongoing courses with detailed validation
-      const ongoingCourses = parsedCourses.filter(course => {
-        const isValid = course && 
-          course.id && 
-          course.name && 
-          typeof course.creditHours === 'number' &&
-          course.status === 'ongoing';
-
-        if (!isValid && course) {
-          console.log('Invalid course:', course);
-        }
-        return isValid;
-      });
-
-      if (ongoingCourses.length === 0) {
-        // Check if there are any courses but none are ongoing
-        const hasCompletedCourses = parsedCourses.some(course => course.status === 'completed');
-        if (hasCompletedCourses) {
-          throw new Error('All courses are marked as completed. Please set at least one course as ongoing in the Courses page.');
-        } else {
-          throw new Error('No ongoing courses found. Please ensure your courses are marked as "ongoing" in the Courses page.');
-        }
-      }
-
-      // Log successful course loading
-      console.log(`Found ${ongoingCourses.length} ongoing courses for scheduling.`);
-
-      // Continue with schedule generation...
-      const prioritizedCourses = [...ongoingCourses].sort((a, b) => {
-        const getPriorityScore = (course) => {
-          const creditWeight = course.creditHours || 3;
-          const progressWeight = 1 - ((course.progress || 0) / 100);
-          const statusBoost = 1.5;
-          return creditWeight * progressWeight * statusBoost;
-        };
-        return getPriorityScore(b) - getPriorityScore(a);
-      });
-
-      // Generate schedule for next 7 days
-      const startDate = new Date();
-      const newSchedule = [];
-
-      for (let day = 0; day < 7; day++) {
-        const currentDate = new Date(startDate);
-        currentDate.setDate(startDate.getDate() + day);
-        
-        // Skip if weekend and weekendStudy is false
-        const isWeekend = [0, 6].includes(currentDate.getDay());
-        if (isWeekend && !preferences.weekendStudy) continue;
-
-        // Get energy level for different times of day
-        const energyLevels = [
-          { time: 'morning', start: 9, energy: preferences.energyLevels.morning },
-          { time: 'afternoon', start: 13, energy: preferences.energyLevels.afternoon },
-          { time: 'evening', start: 17, energy: preferences.energyLevels.evening }
-        ].sort((a, b) => b.energy - a.energy); // Sort by energy level
-
-        let remainingHours = preferences.maxDailyHours;
-        const daySchedule = [];
-
-        // Distribute courses based on energy levels
-        for (const slot of energyLevels) {
-          if (remainingHours <= 0) break;
-
-          // Filter out courses already scheduled for this day
-          const availableCourses = prioritizedCourses.filter(course => 
-            !daySchedule.find(s => s.courseId === course.id)
-          );
-
-          if (availableCourses.length === 0) break;
-
-          const sessionHours = Math.min(
-            remainingHours,
-            preferences.studySessionLength / 60
-          );
-
-          const courseForSlot = availableCourses[0];
-
-          if (courseForSlot) {
-            daySchedule.push({
-              id: `${courseForSlot.id}-${Date.now()}-${Math.random()}`,
-              courseId: courseForSlot.id,
-              courseName: courseForSlot.name,
-              creditHours: courseForSlot.creditHours,
-              category: courseForSlot.category,
-              progress: courseForSlot.progress || 0,
-              startTime: slot.start,
-              duration: Math.round(sessionHours * 60),
-              date: currentDate.toISOString(),
-              energyLevel: slot.energy,
-              completed: false
-            });
-
-            remainingHours -= sessionHours;
-
-            // Add break if not the last session and there's time
-            if (remainingHours > 0 && preferences.breakDuration > 0) {
-              remainingHours -= preferences.breakDuration / 60;
-            }
-          }
-        }
-
-        newSchedule.push(...daySchedule);
-      }
-
-      if (newSchedule.length === 0) {
-        throw new Error('Could not generate a schedule. Please check your preferences and try again.');
-      }
-
-      saveSchedule(newSchedule);
-      toast.success('Schedule generated successfully!');
-    } catch (error) {
-      console.error('Error generating schedule:', error);
-      setError(error.message);
-      toast.error(error.message);
-    } finally {
-      setIsGenerating(false);
-    }
-  }, [preferences, saveSchedule]);
-
-  // Format time for display
-  const formatTimeForDisplay = (hours) => {
-    const hour = Math.floor(hours);
-    const minute = Math.round((hours - hour) * 60);
-    return `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  };
-
-  // Format date for display
-  const formatDateForDisplay = (dateString) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  // Mark study session as completed
-  const markSessionCompleted = (sessionId) => {
-    try {
-      const newSchedule = schedule.map(session => 
-        session.id === sessionId 
-          ? { ...session, completed: !session.completed }
-          : session
-      );
-      saveSchedule(newSchedule);
-    } catch (error) {
-      console.error('Error marking session as completed:', error);
-      setError('Failed to update session status. Please try again.');
-    }
-  };
-
-  return (
-    <div className="flex min-h-screen bg-[#f7f9fc]">
-      <Toaster 
-        position="top-right"
-        toastOptions={{
-          duration: 3000,
-          style: {
-            background: '#fff',
-            color: '#363636',
-            padding: '16px',
-            borderRadius: '8px',
-            boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-          },
-          success: {
-            iconTheme: {
-              primary: '#22C55E',
-              secondary: '#fff',
-            },
-          },
-          error: {
-            iconTheme: {
-              primary: '#EF4444',
-              secondary: '#fff',
-            },
-          },
-        }}
-      />
-      <Sidebar activePage="schedule" />
-      <div className="flex-1 p-8">
-        <div className="mb-8">
-          <Navbar pageTitle="Study Schedule" />
-        </div>
-
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Error Display */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start">
-              <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
               <div>
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <p className="text-sm text-red-700 mt-1">{error}</p>
-                {error.includes('No ongoing courses') && (
-                  <button
-                    onClick={() => navigate('/courses')}
-                    className="mt-2 text-sm font-medium text-red-600 hover:text-red-800 flex items-center"
-                  >
-                    <Plus className="w-4 h-4 mr-1" />
-                    Go to Courses Page
-                  </button>
-                )}
+                <label htmlFor="studySession" className="block text-base font-medium text-gray-700 mb-2">Study Session (minutes)</label>
+                <input
+                  type="number"
+                  id="studySession"
+                  className="mt-1 block w-full border border-gray-400 rounded-md shadow-sm py-2.5 px-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none sm:text-base transition-all duration-200"
+                  value={preferences.studyDuration}
+                  onChange={handleStudyDurationChange}
+                  min="1"
+                />
+              </div>
+              <div>
+                <label htmlFor="studyDays" className="block text-base font-medium text-gray-700 mb-2">Study Days per Week</label>
+                <input
+                  type="number"
+                  id="studyDays"
+                  className="mt-1 block w-full border border-gray-400 rounded-md shadow-sm py-2.5 px-4 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none sm:text-base transition-all duration-200"
+                  value={preferences.studyDaysPerWeek}
+                  onChange={handleStudyDaysPerWeekChange}
+                  min="1"
+                  max="7"
+                />
               </div>
             </div>
-          )}
 
-          {/* Controls */}
-          <div className="bg-white rounded-xl p-6 shadow-sm">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center space-x-4">
-                <button 
-                  onClick={() => setShowPreferences(!showPreferences)}
-                  className="flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-                >
-                  <Settings className="w-4 h-4 mr-2" />
-                  Preferences
-                </button>
-                <button 
-                  onClick={generateOptimalSchedule}
-                  disabled={isGenerating || isLoading}
-                  className="flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isGenerating ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : isLoading ? (
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                  ) : (
-                    <Brain className="w-4 h-4 mr-2" />
-                  )}
-                  {isGenerating ? 'Generating...' : isLoading ? 'Loading Courses...' : 'Generate Schedule'}
-                </button>
+            {/* Progress and Navigation */}
+            <div className="mt-auto pt-6 border-t border-gray-200">
+              <div className="flex justify-between items-center text-sm text-gray-700 mb-2">
+                <span>Step 1 of 3</span>
+                <span>{progress}% Complete</span>
               </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-500">
-                <Clock className="w-4 h-4" />
-                <span>Last updated: {new Date().toLocaleTimeString()}</span>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-blue-700 h-full rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  disabled={currentStep === 1}
+                  className="px-7 py-2.5 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-medium transform hover:-translate-x-1"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  className="px-7 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 hover:shadow-lg transition-all duration-300 transform hover:translate-x-1"
+                >
+                  Next
+                </button>
               </div>
             </div>
           </div>
-          
-          {/* Loading State */}
-          {isLoading && (
-            <div className="bg-white rounded-xl p-8 mt-4 text-center">
-              <RefreshCw className="w-8 h-8 text-blue-600 animate-spin mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">Loading Courses</h3>
-              <p className="text-gray-500 mt-2">Please wait while we load your courses...</p>
-            </div>
-          )}
-
-          {/* No Courses State */}
-          {!isLoading && courses.length === 0 && (
-            <div className="bg-white rounded-xl p-8 mt-4 text-center">
-              <AlertCircle className="w-8 h-8 text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">No Ongoing Courses</h3>
-              <p className="text-gray-500 mt-2">
-                {localStorage.getItem('courses') ? 
-                  'You have courses, but none are marked as ongoing. Please mark at least one course as ongoing in the Courses page.' :
-                  'You haven\'t added any courses yet. Add some courses to generate a schedule.'}
-              </p>
-              <button
-                onClick={() => navigate('/courses')}
-                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors inline-flex items-center"
+        );
+      case 2:
+        return (
+          <div className="min-h-[400px] flex flex-col animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Generate Study Schedule - Step 2 of 3</h2>
+              <button 
+                onClick={handleCloseWizard} 
+                className="text-gray-500 hover:text-gray-700 focus:outline-none transform hover:rotate-90 transition-transform duration-300"
               >
-                <Plus className="w-4 h-4 mr-2" />
-                Go to Courses Page
+                <X className="w-7 h-7" />
               </button>
             </div>
-          )}
 
-          {/* Preferences Panel */}
-          {showPreferences && (
-            <div className="mt-6 border-t pt-6">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-medium text-gray-900 flex items-center">
-                  <Settings className="w-5 h-5 mr-2 text-gray-600" />
-                  Study Preferences
-                </h3>
-                <div className="flex items-center space-x-4">
-                  {/* Templates Dropdown */}
-                  <div className="relative">
-                    <select
-                      onChange={(e) => applyTemplate(e.target.value)}
-                      className="appearance-none bg-white border rounded-lg px-4 py-2 pr-8 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      defaultValue=""
-                    >
-                      <option value="" disabled>Apply Template</option>
-                      {Object.entries(PREFERENCE_TEMPLATES).map(([key, template]) => (
-                        <option key={key} value={key}>{template.name}</option>
-                      ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 transform -translate-y-1/2 pointer-events-none">
-                      <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </div>
+            <div className="flex flex-col items-center text-center mb-8">
+              <div className="p-4 bg-blue-100 rounded-full mb-4 transform hover:scale-105 transition-transform duration-300">
+                <Clock className="w-9 h-9 text-blue-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">When do you study best?</h3>
+              <p className="text-gray-700">Select your preferred study times</p>
+            </div>
 
-                  {/* Undo Button */}
-                  <button 
-                    onClick={() => {
-                      if (hasUnsavedChanges) {
-                        if (window.confirm('Discard unsaved changes?')) {
-                          setShowPreferences(false);
-                        }
-                      } else {
-                        setShowPreferences(false);
-                      }
-                    }}
-                    className={`p-2 rounded-lg transition-colors ${
-                      hasUnsavedChanges
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                    title="Undo last change"
+            {error && (
+              <div className="animate-shake">
+                <p className="text-red-500 text-center mb-6 text-base font-medium">{error}</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+              {timeSlots.map(slot => {
+                const isSelected = preferences.learningTimes.includes(slot.id);
+                return (
+                  <div
+                    key={slot.id}
+                    className={`relative p-5 border rounded-xl cursor-pointer transition-all duration-300 transform hover:-translate-y-1
+                      ${isSelected 
+                        ? 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-200' 
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-md'}`}
+                    onClick={() => setPreferences(prev => ({
+                      ...prev,
+                      learningTimes: isSelected
+                        ? prev.learningTimes.filter(id => id !== slot.id)
+                        : [...prev.learningTimes, slot.id]
+                    }))}
                   >
-                    <Undo className="w-5 h-5" />
-                  </button>
+                    <div className="flex items-center justify-between space-x-3 mb-2">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl transform hover:scale-110 transition-transform duration-300">{slot.icon}</span>
+                        <h4 className="text-lg font-semibold text-gray-800">{slot.label}</h4>
+                      </div>
+                      {isSelected && (
+                        <div className="transform scale-0 group-hover:scale-100 transition-transform duration-300">
+                          <Check className="w-6 h-6 text-blue-600" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700">{slot.time}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Progress and Navigation */}
+            <div className="mt-auto pt-6 border-t border-gray-200">
+              <div className="flex justify-between items-center text-sm text-gray-700 mb-2">
+                <span>Step 2 of 3</span>
+                <span>{progress}% Complete</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-blue-700 h-full rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  className="px-7 py-2.5 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all duration-300 font-medium transform hover:-translate-x-1"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={handleNextStep}
+                  className="px-7 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 hover:shadow-lg transition-all duration-300 transform hover:translate-x-1"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      case 3:
+        return (
+          <div className="min-h-[400px] flex flex-col animate-fade-in">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-2xl font-bold text-gray-900">Generate Study Schedule - Step 3 of 3</h2>
+              <button 
+                onClick={handleCloseWizard} 
+                className="text-gray-500 hover:text-gray-700 focus:outline-none transform hover:rotate-90 transition-transform duration-300"
+              >
+                <X className="w-7 h-7" />
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center text-center mb-8">
+              <div className="p-4 bg-blue-100 rounded-full mb-4 transform hover:scale-105 transition-transform duration-300">
+                <Brain className="w-9 h-9 text-blue-600" />
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900 mb-2">How do you learn best?</h3>
+              <p className="text-gray-700">Select your learning preferences</p>
+            </div>
+
+            {error && (
+              <div className="animate-shake">
+                <p className="text-red-500 text-center mb-6 text-base font-medium">{error}</p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-8">
+              {learningStyles.map(style => {
+                const isSelected = preferences.learningStyles.includes(style.id);
+  return (
+                  <div
+                    key={style.id}
+                    className={`relative p-5 border rounded-xl cursor-pointer transition-all duration-300 transform hover:-translate-y-1
+                      ${isSelected 
+                        ? 'border-blue-500 bg-blue-50 shadow-lg ring-2 ring-blue-200' 
+                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 hover:shadow-md'}`}
+                    onClick={() => setPreferences(prev => ({
+                      ...prev,
+                      learningStyles: isSelected
+                        ? prev.learningStyles.filter(id => id !== style.id)
+                        : [...prev.learningStyles, style.id]
+                    }))}
+                  >
+                    <div className="flex items-center justify-between space-x-3 mb-2">
+                      <div className="flex items-center space-x-3">
+                        <span className="text-2xl transform hover:scale-110 transition-transform duration-300">{style.icon}</span>
+                        <h4 className="text-lg font-semibold text-gray-800">{style.label}</h4>
+                      </div>
+                      {isSelected && (
+                        <div className="transform scale-0 group-hover:scale-100 transition-transform duration-300">
+                          <Check className="w-6 h-6 text-blue-600" />
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-700">{style.description}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Progress and Navigation */}
+            <div className="mt-auto pt-6 border-t border-gray-200">
+              <div className="flex justify-between items-center text-sm text-gray-700 mb-2">
+                <span>Step 3 of 3</span>
+                <span>{progress}% Complete</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-blue-700 h-full rounded-full transition-all duration-700 ease-out"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
+              <div className="flex justify-between">
+                <button
+                  onClick={handlePrevStep}
+                  className="px-7 py-2.5 border border-gray-300 rounded-lg text-gray-700 bg-white hover:bg-gray-50 transition-all duration-300 font-medium transform hover:-translate-x-1"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={handleGenerateSchedule}
+                  className="px-7 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 hover:shadow-lg transition-all duration-300 transform hover:translate-x-1"
+                >
+                  Generate Schedule
+                </button>
+        </div>
+      </div>
+    </div>
+  );
+      case 4:
+        return (
+          <div className="min-h-[400px] flex flex-col animate-fade-in">
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2 mb-6">
+              <button
+                onClick={() => setSelectedFilter('all')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200
+                  ${selectedFilter === 'all' ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                All
+              </button>
+              <button
+                onClick={() => setSelectedFilter('high')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200
+                  ${selectedFilter === 'high' ? 'bg-red-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                High Priority
+              </button>
+              <button
+                onClick={() => setSelectedFilter('normal')}
+                className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200
+                  ${selectedFilter === 'normal' ? 'bg-green-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+              >
+                Normal Priority
+              </button>
+            </div>
+
+            {/* Dashboard Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="bg-white rounded-xl shadow-md p-6 flex items-center space-x-4 border border-gray-200">
+                <div className="p-3 bg-blue-100 rounded-full">
+                  <BookOpen className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Total Sessions</p>
+                  <h3 className="text-2xl font-bold text-gray-900">{generatedSchedule.length}</h3>
                 </div>
               </div>
-
-              {/* Section Navigation */}
-              <div className="flex space-x-2 mb-6">
-                {[
-                  { id: 'time', icon: <Clock className="w-4 h-4" />, label: 'Time' },
-                  { id: 'load', icon: <Brain className="w-4 h-4" />, label: 'Study Load' },
-                  { id: 'energy', icon: <Battery className="w-4 h-4" />, label: 'Energy' }
-                ].map(section => (
-                  <button 
-                    key={section.id}
-                    onClick={() => setActiveSection(section.id)}
-                    className={`flex items-center px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                      activeSection === section.id
-                        ? 'bg-blue-600 text-white shadow-md transform scale-105'
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                  >
-                    <span className="mr-2">{section.icon}</span>
-                    {section.label}
-                  </button>
-                ))}
+              <div className="bg-white rounded-xl shadow-md p-6 flex items-center space-x-4 border border-gray-200">
+                <div className="p-3 bg-red-100 rounded-full">
+                  <Target className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">High Priority</p>
+                  <h3 className="text-2xl font-bold text-gray-900">{generatedSchedule.filter(s => s.priority === 'high').length}</h3>
+                </div>
               </div>
-              
-              <div className="space-y-8">
-                {/* Time Preferences Section */}
-                <div className={`transition-opacity duration-300 ${activeSection === 'time' ? 'opacity-100' : 'opacity-0 hidden'}`}>
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                      <Clock className="w-4 h-4 mr-2 text-blue-600" />
-                      Time Preferences
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {/* Preferred Study Time */}
-                      <div className="relative group">
-                        <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                          Preferred Study Time
-                          <div className="ml-2 relative">
-                            <div className="group-hover:opacity-100 opacity-0 transition-opacity absolute bottom-full mb-2 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white text-xs rounded py-1 px-2 whitespace-nowrap">
-                              Choose your most productive time of day
-                            </div>
-                          </div>
-                        </label>
-                        <div className="flex space-x-2">
-                          {[
-                            { time: 'morning', icon: <Sun className="w-4 h-4" /> },
-                            { time: 'afternoon', icon: <Sunset className="w-4 h-4" /> },
-                            { time: 'evening', icon: <Moon className="w-4 h-4" /> }
-                          ].map(({ time, icon }) => (
-                            <button 
-                              key={time}
-                              onClick={() => handlePreferenceChange('preferredStudyTime', time)}
-                              className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center space-x-2 ${
-                                preferences.preferredStudyTime === time
-                                  ? 'bg-blue-600 text-white shadow-md transform scale-105'
-                                  : 'bg-white text-gray-600 hover:bg-gray-100'
-                              }`}
-                            >
-                              {icon}
-                              <span>{time.charAt(0).toUpperCase() + time.slice(1)}</span>
-                            </button>
-                          ))}
-                        </div>
+              <div className="bg-white rounded-xl shadow-md p-6 flex items-center space-x-4 border border-gray-200">
+                <div className="p-3 bg-green-100 rounded-full">
+                  <Hourglass className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Study Hours</p>
+                  <h3 className="text-2xl font-bold text-gray-900">{Math.floor((generatedSchedule.length * preferences.studyDuration) / 60)}</h3>
+                </div>
+              </div>
+              <div className="bg-white rounded-xl shadow-md p-6 flex items-center space-x-4 border border-gray-200">
+                <div className="p-3 bg-purple-100 rounded-full">
+                  <Book className="w-6 h-6 text-purple-600" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Courses</p>
+                  <h3 className="text-2xl font-bold text-gray-900">{new Set(generatedSchedule.map(s => s.courseId)).size}</h3>
+                </div>
+              </div>
+            </div>
+
+            {/* Weekly View Header */}
+            {viewMode === 'calendar' && (
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-xl font-bold text-gray-900">Weekly View <span className="font-normal text-gray-600 ml-2">{getMonthAndYear(currentDate)}</span></h2>
+                <div className="flex items-center space-x-2">
+                  <button 
+                    onClick={() => setViewMode('calendar')}
+                    className={`p-2 rounded-md ${viewMode === 'calendar' ? 'bg-blue-500 text-white shadow-sm' : 'hover:bg-gray-100 text-gray-600 hover:text-blue-600'} transition-colors duration-200`}
+                  >
+                    <Calendar className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('list')}
+                    className={`p-2 rounded-md ${viewMode === 'list' ? 'bg-blue-500 text-white shadow-sm' : 'hover:bg-gray-100 text-gray-600 hover:text-blue-600'} transition-colors duration-200`}
+                  >
+                    <List className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={() => setViewMode('grid')}
+                    className={`p-2 rounded-md ${viewMode === 'grid' ? 'bg-blue-500 text-white shadow-sm' : 'hover:bg-gray-100 text-gray-600 hover:text-blue-600'} transition-colors duration-200`}
+                  >
+                    <Grid className="w-5 h-5" />
+                  </button>
+                  <button onClick={goToToday} className="px-3 py-1 rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors border border-gray-300">Today</button>
+                  <button onClick={() => navigateMonth(-1)} className="p-2 rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"><span className="font-bold text-xl leading-none">&lt;</span></button>
+                  <button onClick={() => navigateMonth(1)} className="p-2 rounded-md hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition-colors"><span className="font-bold text-xl leading-none">&gt;</span></button>
+                </div>
+              </div>
+            )}
+
+            {/* Calendar Grid */}
+            {isLoading ? (
+              <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 animate-fade-in">
+                <div className="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full text-center relative">
+                  <button 
+                    onClick={handleCloseWizard} 
+                    className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 focus:outline-none transform hover:rotate-90 transition-transform duration-300"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                  <div className="p-4 bg-blue-100 rounded-full inline-flex mb-6">
+                    <Loader className="w-12 h-12 text-blue-600 animate-spin-slow" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-3">Generating Your Schedule</h3>
+                  <p className="text-gray-700 text-base">AI is creating the perfect study plan for you...</p>
+                </div>
+              </div>
+            ) : error ? (
+              <div className="text-center text-red-500 py-16 animate-fade-in">
+                <p className="text-red-600 text-lg font-medium">{error}</p>
+                <button
+                  onClick={() => setCurrentStep(1)}
+                  className="mt-4 px-7 py-2.5 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 transition-all duration-300 transform hover:-translate-y-1"
+                >
+                  Try Again
+                </button>
+              </div>
+            ) : filteredSchedule.length > 0 ? (
+              <>
+                {viewMode === 'calendar' && (
+                  <div className="grid grid-cols-7 gap-4">
+                    {/* Days of the week header */}
+                    {[ 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun' ].map(dayName => (
+                      <div key={dayName} className="text-center text-sm font-medium text-gray-500">
+                        {dayName}
                       </div>
-                      
-                      {/* Study Session Length */}
-                      <div className="relative group">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Study Session Length
-                          <span className="ml-1 text-sm text-gray-500">
-                            ({preferences.studySessionLength} min)
-                          </span>
-                        </label>
+                    ))}
+
+                    {/* Calendar Days */}
+                    {calendarDays.map((date, index) => {
+                      // Get sessions for this specific calendar date
+                      const sessionsForThisDate = date ? sessionsByDay[date.toDateString()] || [] : [];
+
+                      return (
                         <div 
-                          className="relative"
-                          onMouseDown={() => setIsDragging(true)}
-                          onMouseUp={() => setIsDragging(false)}
-                          onMouseLeave={() => setIsDragging(false)}
+                          key={index} 
+                          className={`rounded-lg p-2 min-h-[120px] border relative
+                            ${date ? 'bg-white border-gray-200' : 'bg-gray-50 border-gray-100'}
+                            ${date && date.toDateString() === new Date().toDateString() ? 'border-blue-500 ring-1 ring-blue-200' : ''}
+                          `}
                         >
-                          <input
-                            type="range"
-                            min="15"
-                            max="120"
-                            step="15"
-                            value={preferences.studySessionLength}
-                            onChange={(e) => handlePreferenceChange('studySessionLength', parseInt(e.target.value))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                          />
-                          <div 
-                            className={`absolute left-0 top-0 h-2 bg-blue-600 rounded-l-lg transition-all duration-200 ${
-                              isDragging ? 'opacity-50' : 'opacity-100'
-                            }`}
-                            style={{ width: `${(preferences.studySessionLength - 15) / (120 - 15) * 100}%` }}
-                          />
+                          {date && (
+                            <p className={`text-right font-semibold mb-2 ${date.toDateString() === new Date().toDateString() ? 'text-blue-600' : 'text-gray-800'}`}>
+                              {date.getDate()}
+                            </p>
+                          )}
+                          {sessionsForThisDate.map((session, sessionIndex) => {
+                            const course = availableCourses.find(c => c.id === session.courseId) || {};
+                            const sessionColor = session.courseColor;
+
+                            return (
+                              <div 
+                                key={sessionIndex} 
+                                className="bg-white rounded-lg p-2 mb-1 shadow-sm border-l-4 relative overflow-hidden"
+                                style={{ borderColor: sessionColor }}
+                              >
+                                {session.priority === 'high' && (
+                                  <span className="absolute top-1 right-1 bg-red-100 text-red-700 text-xs font-medium px-1.5 py-0.5 rounded-full">
+                                    High Priority
+                                  </span>
+                                )}
+                                <h5 className="text-xs font-semibold text-gray-800 leading-tight">{course.name || course.title || 'Unnamed Course'}</h5>
+                                <p className="text-xs text-gray-600 leading-tight">{session.timeSlot}</p>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <div className="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>15m</span>
-                          <span>1h</span>
-                          <span>2h</span>
-                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {viewMode === 'list' && (
+                  <DragDropContext onDragEnd={handleDragEnd}>
+                    <div className="space-y-6 px-4 py-2">
+                      {uniqueDays.map(dateObj => {
+                        const sessionsOnDay = filteredSchedule.filter(session => session.fullDate.toDateString() === dateObj.toDateString());
+                        const dayName = daysOfWeekNames[dateObj.getDay()];
+                        
+                        return (
+                          <div key={dateObj.toDateString()}>
+                            <h3 className="text-2xl font-bold text-gray-900 mb-1">{dayName}</h3>
+                            <p className="text-gray-600 mb-6">{sessionsOnDay.length} sessions scheduled</p>
+                            <Droppable droppableId={dateObj.toDateString()}>
+                              {(provided, snapshot) => (
+                                <div
+                                  {...provided.droppableProps}
+                                  ref={provided.innerRef}
+                                  className={`space-y-4 p-2 rounded-lg transition-colors duration-200
+                                    ${snapshot.isDraggingOver ? 'bg-blue-50' : ''}`}
+                                >
+                                  {sessionsOnDay.map((session, sessionIndex) => {
+                                    const course = availableCourses.find(c => c.id === session.courseId) || {};
+                                    const sessionColor = session.courseColor;
+                                    const learningStyleText = session.learningStyle === 'visual' ? 'Visual Learning' :
+                                                            session.learningStyle === 'auditory' ? 'Auditory Learning' :
+                                                            session.learningStyle === 'kinesthetic' ? 'Hands-on Learning' :
+                                                            session.learningStyle === 'reading-writing' ? 'Reading/Writing' :
+                                                            session.learningStyle === 'group-study' ? 'Group Study' :
+                                                            session.learningStyle === 'problem-solving' ? 'Problem Solving' :
+                                                            session.learningStyle;
+
+                                    return (
+                                      <Draggable
+                                        key={session.id || sessionIndex}
+                                        draggableId={session.id || `session-${sessionIndex}`}
+                                        index={sessionIndex}
+                                      >
+                                        {(provided, snapshot) => (
+                                          <div
+                                            ref={provided.innerRef}
+                                            {...provided.draggableProps}
+                                            className={`bg-white rounded-xl shadow-sm p-5 flex items-start space-x-4 border-l-4 border-t border-b border-r border-gray-200 group hover:shadow-md transition-all duration-200
+                                              ${snapshot.isDragging ? 'shadow-lg ring-2 ring-blue-200 rotate-1 scale-105' : ''}
+                                              ${snapshot.isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                            style={{
+                                              ...provided.draggableProps.style,
+                                              borderColor: sessionColor,
+                                              transform: snapshot.isDragging ? provided.draggableProps.style?.transform : 'none'
+                                            }}
+                                          >
+                                            <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
+                                              <GripVertical className="w-5 h-5 text-gray-400 hover:text-gray-600" />
+                                            </div>
+                                            <span className="w-3 h-3 rounded-full flex-shrink-0 mt-2" style={{ backgroundColor: sessionColor }}></span>
+                                            <div className="flex-1">
+                                              <div className="flex justify-between items-center mb-1">
+                                                <h4 className="text-lg font-semibold text-gray-800">
+                                                  {course.name || course.title || 'Unnamed Course'} 
+                                                  <span className="text-base text-gray-500 font-normal ml-2">{course.code}</span>
+                                                </h4>
+                                                <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                  <button 
+                                                    onClick={() => handleEditSession(session)}
+                                                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200"
+                                                  >
+                                                    <Edit2 className="w-4 h-4" />
+                                                  </button>
+                                                  <button 
+                                                    onClick={() => handleDeleteSession(session.id)}
+                                                    className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors duration-200"
+                                                  >
+                                                    <Trash2 className="w-4 h-4" />
+                                                  </button>
+                                                </div>
+                                              </div>
+                                              <p className="text-gray-700 mb-2">{session.activity}</p>
+                                              <div className="flex text-sm text-gray-600 space-x-4">
+                                                <span>{session.timeSlot}</span>
+                                                <span>{session.duration} minutes</span>
+                                                <span>{learningStyleText}</span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        )}
+                                      </Draggable>
+                                    );
+                                  })}
+                                  {provided.placeholder}
+                                </div>
+                              )}
+                            </Droppable>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </DragDropContext>
+                )}
+
+                {viewMode === 'grid' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-4 py-2">
+                    {filteredSchedule.map((session, sessionIndex) => {
+                      const course = availableCourses.find(c => c.id === session.courseId) || {};
+                      const sessionColor = session.courseColor;
+                      const learningStyleText = session.learningStyle === 'visual' ? 'Visual Learning' :
+                                                session.learningStyle === 'auditory' ? 'Auditory Learning' :
+                                                session.learningStyle === 'kinesthetic' ? 'Hands-on Learning' :
+                                                session.learningStyle === 'reading-writing' ? 'Reading/Writing' :
+                                                session.learningStyle === 'group-study' ? 'Group Study' :
+                                                session.learningStyle === 'problem-solving' ? 'Problem Solving' :
+                                                session.learningStyle;
+
+                              const daysOfWeekNamesLong = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+                              return (
+                                <div 
+                                  key={sessionIndex} 
+                                  className="bg-white rounded-xl shadow-sm p-5 flex flex-col space-y-3 border-l-4 border-t border-b border-r border-gray-200"
+                                  style={{ borderColor: sessionColor }}
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <div className="flex items-center space-x-2">
+                                      <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: sessionColor }}></span>
+                                      <h4 className="text-lg font-semibold text-gray-800">{course.name || course.title || 'Unnamed Course'} <span className="text-base text-gray-500 font-normal ml-1">{course.code}</span></h4>
+                                    </div>
+                                    <button className="text-gray-400 hover:text-gray-700"><MoreHorizontal className="w-5 h-5" /></button>
+                                  </div>
+                                  <p className="text-gray-700">{session.activity}</p>
+                                  <div className="flex flex-col text-sm text-gray-600">
+                                    <span>{daysOfWeekNamesLong[session.fullDate.getDay()]} - {session.timeSlot}</span>
+                                    <span>{session.duration} minutes</span>
+                                    <span>{learningStyleText}</span>
+                                  </div>
+                                  {session.priority === 'high' && (
+                                    <span className="self-end bg-red-100 text-red-700 text-xs font-medium px-2 py-0.5 rounded-full">High Priority</span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-center text-gray-600 py-16">
+                        <p>No schedule generated yet. Please select your preferences.</p>
                       </div>
-                      
-                      {/* Break Duration */}
-                      <div className="relative group">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Break Duration
-                          <span className="ml-1 text-sm text-gray-500">
-                            ({preferences.breakDuration} min)
-                          </span>
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="range"
-                            min="5"
-                            max="30"
-                            step="5"
-                            value={preferences.breakDuration}
-                            onChange={(e) => handlePreferenceChange('breakDuration', parseInt(e.target.value))}
-                            className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                          />
-                          <div 
-                            className="absolute left-0 top-0 h-2 bg-blue-600 rounded-l-lg transition-all duration-200"
-                            style={{ width: `${(preferences.breakDuration - 5) / (30 - 5) * 100}%` }}
-                          />
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-500 mt-1">
-                          <span>5m</span>
-                          <span>15m</span>
-                          <span>30m</span>
-                        </div>
-                      </div>
+                    )}
+                  </div>
+                );
+              default:
+                return null;
+            }
+          };
+
+          return (
+            <div className="flex h-screen bg-gray-50 overflow-hidden">
+              {/* Main Content */}
+              <div className="flex-1 transition-all duration-300">
+                {/* Top Bar */}
+                <div className="bg-white shadow-sm py-4 px-6 flex items-center justify-between sticky top-0 z-10 border-b border-gray-200">
+                  <div className="flex items-center space-x-4">
+                    <h1 className="text-2xl font-bold text-gray-900">My Schedule</h1>
+                    <span className="flex items-center text-sm text-gray-600">
+                      <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2"></span>
+                      {generatedSchedule.length} active sessions
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input 
+                        type="text" 
+                        placeholder="Search sessions..." 
+                        className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-sm w-48"
+                      />
                     </div>
                   </div>
                 </div>
-                
-                {/* Study Load Section */}
-                <div className={`transition-opacity duration-300 ${activeSection === 'load' ? 'opacity-100' : 'opacity-0 hidden'}`}>
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                      <Brain className="w-4 h-4 mr-2 text-purple-600" />
-                      Study Load
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Max Daily Hours */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Max Daily Study Hours
-                          <span className="ml-1 text-sm text-gray-500">
-                            ({preferences.maxDailyHours} hours)
-                          </span>
-                        </label>
-                        <div className="flex items-center space-x-4">
-                          <div className="relative flex-1">
-                            <input
-                              type="range"
-                              min="1"
-                              max="12"
-                              value={preferences.maxDailyHours}
-                              onChange={(e) => handlePreferenceChange('maxDailyHours', parseInt(e.target.value))}
-                              className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-purple-600"
-                            />
-                            <div 
-                              className="absolute left-0 top-0 h-2 bg-purple-600 rounded-l-lg transition-all duration-200"
-                              style={{ width: `${(preferences.maxDailyHours - 1) / (12 - 1) * 100}%` }}
-                            />
-                          </div>
-                          <div className="w-16 px-3 py-1 bg-white border rounded-lg text-center text-sm">
-                            {preferences.maxDailyHours}h
-                          </div>
+
+                {/* Main Content Area */}
+                <div className="h-[calc(100vh-4rem)] overflow-y-auto">
+                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    <div className="bg-white rounded-lg shadow-sm p-8">
+                      {currentStep !== 0 && (
+                        <div className="mb-8">
+                          <h1 className="text-3xl font-bold text-gray-900">Schedule Generator</h1>
+                          <p className="text-gray-700">Create personalized study schedules with AI-powered auto-generation</p>
                         </div>
-                      </div>
-                      
-                      {/* Weekend Study Toggle */}
+                      )}
+
+                      {renderContent()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Keep only the necessary modals */}
+              {isEditMode && editingSession && (
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 animate-fade-in">
+                  <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-gray-900">Edit Study Session</h3>
+                      <button 
+                        onClick={() => setIsEditMode(false)}
+                        className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Weekend Study
-                        </label>
-                        <button
-                          onClick={() => handlePreferenceChange('weekendStudy', !preferences.weekendStudy)}
-                          className={`w-full py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 ${
-                            preferences.weekendStudy
-                              ? 'bg-purple-600 text-white transform scale-105'
-                              : 'bg-white text-gray-600 hover:bg-gray-100'
-                          }`}
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+                        <select 
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.courseId}
+                          onChange={(e) => setEditingSession(prev => ({ ...prev, courseId: e.target.value }))}
                         >
-                          {preferences.weekendStudy ? '✓ Enabled' : '✗ Disabled'}
+                          {availableCourses.map(course => (
+                            <option key={course.id} value={course.id}>
+                              {course.name || course.title}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                        <input 
+                          type="date"
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.fullDate.toISOString().split('T')[0]}
+                          onChange={(e) => setEditingSession(prev => ({ 
+                            ...prev, 
+                            fullDate: new Date(e.target.value)
+                          }))}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
+                        <select 
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.timeSlot}
+                          onChange={(e) => setEditingSession(prev => ({ ...prev, timeSlot: e.target.value }))}
+                        >
+                          {timeSlots.map(slot => (
+                            <option key={slot.id} value={slot.time}>
+                              {slot.label} ({slot.time})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+                        <input 
+                          type="number"
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.duration}
+                          onChange={(e) => setEditingSession(prev => ({ 
+                            ...prev, 
+                            duration: parseInt(e.target.value) || 60
+                          }))}
+                          min="15"
+                          step="15"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                        <select 
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.priority}
+                          onChange={(e) => setEditingSession(prev => ({ ...prev, priority: e.target.value }))}
+                        >
+                          <option value="normal">Normal</option>
+                          <option value="high">High</option>
+                        </select>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 mt-6">
+                        <button
+                          onClick={() => setIsEditMode(false)}
+                          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={() => handleUpdateSession(editingSession)}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                        >
+                          Save Changes
                         </button>
                       </div>
                     </div>
                   </div>
                 </div>
-                
-                {/* Energy Levels Section */}
-                <div className={`transition-opacity duration-300 ${activeSection === 'energy' ? 'opacity-100' : 'opacity-0 hidden'}`}>
-                  <div className="bg-gray-50 rounded-xl p-6">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4 flex items-center">
-                      <Battery className="w-4 h-4 mr-2 text-green-600" />
-                      Energy Levels
-                    </h4>
-                    <div className="space-y-6">
-                      {Object.entries(preferences.energyLevels).map(([time, level]) => (
-                        <div key={time} className="space-y-2">
-                          <div className="flex justify-between items-center">
-                            <label className="text-sm font-medium text-gray-700 capitalize flex items-center">
-                              {time === 'morning' && <Sun className="w-4 h-4 mr-2" />}
-                              {time === 'afternoon' && <Sunset className="w-4 h-4 mr-2" />}
-                              {time === 'evening' && <Moon className="w-4 h-4 mr-2" />}
-                              {time}
-                            </label>
-                            <span className="text-sm text-gray-500">
-                              Level: {level}/10
-                            </span>
-                          </div>
-                          <div className="flex items-center space-x-4">
-                            <div className="relative flex-1">
-                              <input
-                                type="range"
-                                min="1"
-                                max="10"
-                                value={level}
-                                onChange={(e) => handlePreferenceChange(
-                                  `energyLevels.${time}`,
-                                  parseInt(e.target.value)
-                                )}
-                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                              />
-                              <div 
-                                className="absolute left-0 top-0 h-2 rounded-l-lg transition-all duration-200"
-                                style={{
-                                  width: `${(level - 1) / 9 * 100}%`,
-                                  background: `linear-gradient(to right, #22C55E ${level * 10}%, #E5E7EB ${level * 10}%)`
-                                }}
-                              />
-                            </div>
-                            <div 
-                              className="w-12 h-12 rounded-full flex items-center justify-center transition-all duration-200"
-                              style={{
-                                backgroundColor: `rgba(34, 197, 94, ${level / 10})`,
-                                color: level > 5 ? 'white' : 'black',
-                                transform: `scale(${0.9 + (level / 20)})`
-                              }}
-                            >
-                              {level}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Save/Cancel Buttons */}
-                <div className="flex justify-between items-center">
-                  <div className="text-sm text-gray-500">
-                    {hasUnsavedChanges && (
-                      <span className="flex items-center text-yellow-600">
-                        <AlertCircle className="w-4 h-4 mr-1" />
-                        You have unsaved changes
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex space-x-4">
-                    <button
-                      onClick={() => {
-                        if (hasUnsavedChanges) {
-                          if (window.confirm('Discard unsaved changes?')) {
-                            setShowPreferences(false);
-                          }
-                        } else {
-                          setShowPreferences(false);
-                        }
-                      }}
-                      className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={savePreferences}
-                      disabled={!hasUnsavedChanges}
-                      className={`px-6 py-2 rounded-lg text-white flex items-center transition-all duration-200 ${
-                        hasUnsavedChanges
-                          ? 'bg-blue-600 hover:bg-blue-700 transform hover:scale-105'
-                          : 'bg-gray-400 cursor-not-allowed'
-                      }`}
-                    >
-                      <Save className="w-4 h-4 mr-2" />
-                      Save Changes
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+              )}
 
-        {/* Schedule Display */}
-        <div className="bg-white rounded-xl shadow-sm">
-          <div className="p-6 border-b">
-            <h2 className="text-lg font-medium text-gray-900">Generated Schedule</h2>
-          </div>
-          <div className="divide-y">
-            {schedule.length > 0 ? (
-              schedule.map((session) => (
-                <div 
-                  key={session.id}
-                  className={`p-6 transition-colors ${
-                    session.completed ? 'bg-green-50' : 'hover:bg-gray-50'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-start space-x-4">
-                      <div className="flex-shrink-0">
-                        <Calendar className="w-5 h-5 text-gray-400" />
-                      </div>
+              {isExportModalOpen && (
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 animate-fade-in">
+                  <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-gray-900">Export Schedule</h3>
+                      <button 
+                        onClick={() => setIsExportModalOpen(false)}
+                        className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
                       <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          {session.courseName}
-                        </h3>
-                        <p className="text-sm text-gray-500">
-                          {formatDateForDisplay(session.date)} at {formatTimeForDisplay(session.startTime)}
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          Duration: {session.duration} minutes • Energy Level: {session.energyLevel}/10
-                        </p>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Export Format</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          <button
+                            onClick={() => setExportFormat('json')}
+                            className={`p-3 border rounded-lg flex flex-col items-center space-y-2 transition-all duration-200
+                              ${exportFormat === 'json' 
+                                ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                                : 'border-gray-200 hover:border-gray-300'}`}
+                          >
+                            <FileText className="w-6 h-6" />
+                            <span className="text-sm font-medium">JSON</span>
+                          </button>
+                          <button
+                            onClick={() => setExportFormat('csv')}
+                            className={`p-3 border rounded-lg flex flex-col items-center space-y-2 transition-all duration-200
+                              ${exportFormat === 'csv' 
+                                ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                                : 'border-gray-200 hover:border-gray-300'}`}
+                          >
+                            <FileText className="w-6 h-6" />
+                            <span className="text-sm font-medium">CSV</span>
+                          </button>
+                          <button
+                            onClick={() => setExportFormat('ical')}
+                            className={`p-3 border rounded-lg flex flex-col items-center space-y-2 transition-all duration-200
+                              ${exportFormat === 'ical' 
+                                ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                                : 'border-gray-200 hover:border-gray-300'}`}
+                          >
+                            <Calendar className="w-6 h-6" />
+                            <span className="text-sm font-medium">iCal</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end space-x-3 mt-6">
+                        <button
+                          onClick={() => setIsExportModalOpen(false)}
+                          className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={exportSchedule}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 flex items-center space-x-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          <span>Export</span>
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => markSessionCompleted(session.id)}
-                      className={`flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                        session.completed
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                      }`}
-                    >
-                      {session.completed ? (
-                        <>
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Completed
-                        </>
-                      ) : (
-                        'Mark Complete'
-                      )}
-                    </button>
                   </div>
                 </div>
-              ))
-            ) : (
-              <div className="p-12 text-center">
-                <AlertCircle className="w-8 h-8 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  No Schedule Generated
-                </h3>
-                <p className="text-gray-500">
-                  {courses.length === 0 
-                    ? "Add some courses first, then generate your study schedule."
-                    : "Click the 'Generate Schedule' button to create your personalized study plan."}
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
+              )}
+            </div>
+          );
+        };
 
-export default Schedule;
+        export default Schedule; 

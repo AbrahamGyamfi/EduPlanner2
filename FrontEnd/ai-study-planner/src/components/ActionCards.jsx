@@ -1,6 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+import mammoth from "mammoth";
 
-const ActionCards = ({ uploadedSlides }) => {
+const ActionCards = ({ courseData, hasSlides, onSummarize, onGenerateQuiz, onGenerateFlashcards }) => {
   const [showSummary, setShowSummary] = useState(false);
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [showResourcesModal, setShowResourcesModal] = useState(false);
@@ -11,96 +13,181 @@ const ActionCards = ({ uploadedSlides }) => {
   const [resources, setResources] = useState([]);
   const [loadingResources, setLoadingResources] = useState(false);
 
-  const handleSummaryClick = async () => {
-    if (!uploadedSlides) return;
-    setLoadingSummary(true);
-    const formData = new FormData();
-    formData.append("file", uploadedSlides);
-    try {
-      const response = await fetch("http://localhost:5000/generate-summary", {
-        method: "POST",
-        body: formData
-      });
-      const data = await response.json();
-      setSummaryContent(data.summary || "No summary generated.");
-    } catch (e) {
-      setSummaryContent("Failed to generate summary.");
+  // Check if there are uploaded slides
+  const hasUploadedSlides = courseData?.slides && courseData.slides.length > 0;
+
+  const fetchAndExtractText = async (slide) => {
+    // Fetch the file from backend
+    const response = await fetch(`http://localhost:5000/slides/${encodeURIComponent(slide)}`);
+    const blob = await response.blob();
+    if (slide.toLowerCase().endsWith(".pdf")) {
+      // Extract text from PDF
+      const pdf = await pdfjsLib.getDocument({ data: await blob.arrayBuffer() }).promise;
+      let text = "";
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(item => item.str).join(" ") + " ";
+      }
+      return text;
+    } else if (slide.toLowerCase().endsWith(".docx")) {
+      // Extract text from Word using mammoth
+      const arrayBuffer = await blob.arrayBuffer();
+      const { value } = await mammoth.extractRawText({ arrayBuffer });
+      return value;
     }
+    throw new Error("Unsupported file type");
+  };
+
+  const callBackendAPI = async (file, type) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const endpoint = type === "summarize" ? "/generate-summary" : "/generate-quiz";
+    const response = await fetch(`http://localhost:5000${endpoint}`, {
+      method: "POST",
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'API request failed');
+    }
+    
+    const data = await response.json();
+    return type === "summarize" ? data.summary : data.quiz;
+  };
+
+  const handleSummaryClick = async () => {
+    if (!hasUploadedSlides) return;
+    setLoadingSummary(true);
     setShowSummary(true);
+    setSummaryContent("");
+    
+    try {
+      // Use the first uploaded slide for summary
+      const firstSlide = courseData.slides[0];
+      // Get the actual file object from the backend
+      const response = await fetch(`http://localhost:5000/slides/${encodeURIComponent(firstSlide)}`);
+      const blob = await response.blob();
+      const file = new File([blob], firstSlide, { type: blob.type });
+      
+      const summaryResult = await callBackendAPI(file, "summarize");
+      setSummaryContent(summaryResult);
+    } catch (e) {
+      setSummaryContent("Failed to generate summary: " + e.message);
+    }
     setLoadingSummary(false);
   };
 
   const handleQuizClick = async () => {
-    if (!uploadedSlides) return;
+    if (!hasUploadedSlides) return;
     setLoadingQuiz(true);
-    const formData = new FormData();
-    formData.append("file", uploadedSlides);
-    try {
-      const response = await fetch("http://localhost:5000/generate-quiz", {
-        method: "POST",
-        body: formData
-      });
-      const data = await response.json();
-      setQuizContent(data.quiz || "No quiz generated.");
-    } catch (e) {
-      setQuizContent("Failed to generate quiz.");
-    }
     setShowQuizModal(true);
+    setQuizContent("");
+    
+    try {
+      // Use the first uploaded slide for quiz
+      const firstSlide = courseData.slides[0];
+      // Get the actual file object from the backend
+      const response = await fetch(`http://localhost:5000/slides/${encodeURIComponent(firstSlide)}`);
+      const blob = await response.blob();
+      const file = new File([blob], firstSlide, { type: blob.type });
+      
+      const quizResult = await callBackendAPI(file, "quiz");
+      setQuizContent(quizResult);
+    } catch (e) {
+      setQuizContent("Failed to generate quiz: " + e.message);
+    }
     setLoadingQuiz(false);
   };
 
   const handleResourcesClick = async () => {
-    if (!uploadedSlides) return;
+    if (!hasUploadedSlides) return;
     setLoadingResources(true);
-    const formData = new FormData();
-    formData.append("file", uploadedSlides);
+    setShowResourcesModal(true);
+    setResources([]);
+    
     try {
-      const response = await fetch("http://localhost:5000/suggest-resources", {
-        method: "POST",
-        body: formData
-      });
-      const data = await response.json();
-      setResources(data.resources || []);
+      // Generate resources based on slide names
+      const slideNames = courseData.slides.map(slide => slide.split('.')[0]);
+      const resources = slideNames.map(name => ({
+        title: `${name} - Wikipedia`,
+        description: `Learn more about ${name} on Wikipedia`,
+        type: "Reference",
+        url: `https://en.wikipedia.org/wiki/${name.replace(' ', '_')}`
+      }));
+      setResources(resources);
     } catch (e) {
       setResources([]);
     }
-    setShowResourcesModal(true);
     setLoadingResources(false);
   };
 
+  // Debug log to see the value
+  console.log("ActionCards hasSlides:", hasSlides);
+  
+  // Fix: Remove the useEffect with undefined uploadedSlides reference
+  useEffect(() => {
+    console.log("Current slide state:", {
+      courseDataSlides: courseData?.slides,
+      hasSlides: hasSlides
+    });
+  }, [courseData?.slides, hasSlides]);
+
   return (
     <>
-      <div className="flex flex-wrap gap-8 mt-6 justify-center">
-        <button
-          onClick={handleSummaryClick}
-          className={`flex-1 min-w-[260px] max-w-[340px] bg-white rounded-2xl shadow-md p-8 text-center border-2 border-gray-200 cursor-pointer transition hover:shadow-lg hover:border-indigo-600 hover:-translate-y-0.5 focus:outline-none ${!uploadedSlides ? 'opacity-50 cursor-not-allowed' : ''}`}
-          type="button"
-          disabled={!uploadedSlides || loadingSummary}
-        >
-          <div className="text-4xl text-indigo-600 mb-4">📝</div>
-          <div className="font-bold text-xl mb-2">Summary</div>
-          <div className="text-gray-593 text-base">{uploadedSlides ? 'Get a concise summary of your uploaded slides.' : 'Upload slides to enable summary.'}</div>
-        </button>
-        <button
-          onClick={handleQuizClick}
-          className={`flex-1 min-w-[260px] max-w-[340px] bg-white rounded-2xl shadow-md p-8 text-center border-2 border-gray-200 cursor-pointer transition hover:shadow-lg hover:border-indigo-600 hover:-translate-y-0.5 focus:outline-none ${!uploadedSlides ? 'opacity-50 cursor-not-allowed' : ''}`}
-          type="button"
-          disabled={!uploadedSlides || loadingQuiz}
-        >
-          <div className="text-4xl text-indigo-600 mb-4">🧩</div>
-          <div className="font-bold text-xl mb-2">Quiz Generation</div>
-          <div className="text-gray-600 text-base">{uploadedSlides ? 'Generate quizzes from your uploaded slides.' : 'Upload slides to enable quiz generation.'}</div>
-        </button>
-        <button
-          onClick={handleResourcesClick}
-          className={`flex-1 min-w-[260px] max-w-[340px] bg-white rounded-2xl shadow-md p-8 text-center border-2 border-gray-200 cursor-pointer transition hover:shadow-lg hover:border-indigo-600 hover:-translate-y-0.5 focus:outline-none ${!uploadedSlides ? 'opacity-50 cursor-not-allowed' : ''}`}
-          type="button"
-          disabled={!uploadedSlides || loadingResources}
-        >
-          <div className="text-4xl text-indigo-600 mb-4">📚</div>
-          <div className="font-bold text-xl mb-2">Related Resources</div>
-          <div className="text-gray-600 text-base">{uploadedSlides ? 'Find related study materials and resources.' : 'Upload slides to find resources.'}</div>
-        </button>
+      <div className="grid md:grid-cols-3 gap-4 mb-8">
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex flex-col h-full">
+            <h3 className="font-bold text-lg mb-2 text-indigo-700">Summary</h3>
+            <p className="text-gray-600 mb-4 flex-grow">Generate a concise summary of your slide content</p>
+            <button 
+              onClick={handleSummaryClick}
+              disabled={!hasSlides}
+              className={`${hasSlides 
+                ? 'bg-indigo-600 hover:bg-indigo-700' 
+                : 'bg-gray-300 cursor-not-allowed'} 
+                text-white py-2 px-4 rounded-lg transition-colors`}
+            >
+              {hasSlides ? 'Generate Summary' : 'Upload slides first'}
+            </button>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex flex-col h-full">
+            <h3 className="font-bold text-lg mb-2 text-indigo-700">Quiz</h3>
+            <p className="text-gray-600 mb-4 flex-grow">Create questions to test your knowledge</p>
+            <button 
+              onClick={handleQuizClick}
+              disabled={!hasSlides}
+              className={`${hasSlides 
+                ? 'bg-indigo-600 hover:bg-indigo-700' 
+                : 'bg-gray-300 cursor-not-allowed'} 
+                text-white py-2 px-4 rounded-lg transition-colors`}
+            >
+              {hasSlides ? 'Generate Quiz' : 'Upload slides first'}
+            </button>
+          </div>
+        </div>
+        
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <div className="flex flex-col h-full">
+            <h3 className="font-bold text-lg mb-2 text-indigo-700">Flashcards</h3>
+            <p className="text-gray-600 mb-4 flex-grow">Create flashcards to enhance your memory</p>
+            <button 
+              onClick={onGenerateFlashcards}
+              disabled={!hasSlides || !onGenerateFlashcards}
+              className={`${hasSlides && onGenerateFlashcards
+                ? 'bg-indigo-600 hover:bg-indigo-700' 
+                : 'bg-gray-300 cursor-not-allowed'} 
+                text-white py-2 px-4 rounded-lg transition-colors`}
+            >
+              {!hasSlides ? 'Upload slides first' : 'Coming Soon'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Summary Modal */}
@@ -116,12 +203,11 @@ const ActionCards = ({ uploadedSlides }) => {
             </button>
             <h2 className="text-2xl font-bold mb-2 text-center">Summary</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
-              Summary of your uploaded slides: <span className="font-semibold text-indigo-700">{uploadedSlides?.name}</span>
+              Summary of your uploaded slides: <span className="font-semibold text-indigo-700">{courseData?.slides?.[0]}</span>
             </p>
             <div className="w-full bg-gray-100 rounded-lg p-4 mb-4 text-gray-800 text-left whitespace-pre-wrap min-h-[100px]">
-              {summaryContent}
+              {loadingSummary ? "Generating summary..." : summaryContent}
             </div>
-            {loadingSummary && <div className="text-indigo-700 font-semibold mb-2">Generating summary...</div>}
             <button
               className="text-gray-500 hover:text-indigo-700 text-base mt-4"
               onClick={() => setShowSummary(false)}
@@ -145,12 +231,11 @@ const ActionCards = ({ uploadedSlides }) => {
             </button>
             <h2 className="text-2xl font-bold mb-2 text-center">Quiz Generation</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
-              Generate quizzes based on your uploaded slides: <span className="font-semibold text-indigo-700">{uploadedSlides?.name}</span>
+              Generate quizzes based on your uploaded slides: <span className="font-semibold text-indigo-700">{courseData?.slides?.[0]}</span>
             </p>
             <div className="w-full bg-gray-100 rounded-lg p-4 mb-4 text-gray-800 text-left whitespace-pre-wrap min-h-[100px]">
-              {quizContent}
+              {loadingQuiz ? "Generating quiz..." : quizContent}
             </div>
-            {loadingQuiz && <div className="text-indigo-700 font-semibold mb-2">Generating quiz...</div>}
             <button
               className="text-gray-500 hover:text-indigo-700 text-base mt-4"
               onClick={() => setShowQuizModal(false)}
@@ -174,7 +259,7 @@ const ActionCards = ({ uploadedSlides }) => {
             </button>
             <h2 className="text-2xl font-bold mb-2 text-center">Related Resources</h2>
             <p className="text-gray-500 mb-8 text-center max-w-md">
-              Suggested resources based on your slides: <span className="font-semibold text-indigo-700">{uploadedSlides?.name}</span>
+              Suggested resources based on your slides: <span className="font-semibold text-indigo-700">{courseData?.slides?.[0]}</span>
             </p>
             <div className="w-full space-y-4">
               {resources.length > 0 ? (
@@ -207,20 +292,6 @@ const ActionCards = ({ uploadedSlides }) => {
             >
               &larr; Back to Course
             </button>
-          </div>
-        </div>
-      )}
-
-      {/* Loading Overlay */}
-      {(loadingQuiz || loadingSummary || loadingResources) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-          <div className="bg-white rounded-xl shadow-lg max-w-sm w-full p-8 flex flex-col items-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-            <div className="text-lg text-indigo-700 font-semibold">
-              {loadingQuiz && "Generating quiz..."}
-              {loadingSummary && "Generating summary..."}
-              {loadingResources && "Finding resources..."}
-            </div>
           </div>
         </div>
       )}
