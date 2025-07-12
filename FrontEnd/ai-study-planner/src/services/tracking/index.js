@@ -1,8 +1,9 @@
-// Main Tracking Service
+// Main Tracking Service - System Only Mode
 import StudySessionTracker from './StudySessionTracker';
 import AssignmentTracker from './AssignmentTracker';
 import EngagementTracker from './EngagementTracker';
 import DataSyncService from './DataSyncService';
+import SystemDataValidator from '../security/SystemDataValidator';
 
 class TrackingService {
   constructor() {
@@ -10,9 +11,11 @@ class TrackingService {
     this.assignmentTracker = new AssignmentTracker();
     this.engagementTracker = new EngagementTracker();
     this.dataSyncService = new DataSyncService();
+    this.validator = new SystemDataValidator();
     
     this.isTracking = false;
-    this.setupEventListeners();
+    this.systemOnlyMode = true; // Block all user interactions
+    this.setupSystemEventListeners();
   }
 
   startTracking() {
@@ -42,57 +45,73 @@ class TrackingService {
     }
   }
 
-  setupEventListeners() {
-    // Track page visibility changes
+  setupSystemEventListeners() {
+    // Only track system events, block user interactions
+    
+    // Track page visibility changes (system event)
     document.addEventListener('visibilitychange', () => {
       if (!this.isTracking) return;
+
+      const systemData = this.validator.generateSystemData('page_visibility', {
+        visibilityState: document.visibilityState,
+        automated: true
+      });
 
       if (document.visibilityState === 'visible') {
         this.studySessionTracker.startSession();
       } else {
         const session = this.studySessionTracker.endSession();
         if (session) {
-          this.dataSyncService.queueData({
-            type: 'study_session',
-            data: session
+          const sessionData = this.validator.generateSystemData('study_session', {
+            sessionData: session,
+            automated: true
           });
+          this.dataSyncService.queueData(sessionData);
         }
       }
     });
 
-    // Track user interactions
-    document.addEventListener('click', () => {
-      if (!this.isTracking) return;
-      this.engagementTracker.recordInteraction('click');
+    // Block all user interaction events
+    const userEventTypes = ['click', 'keypress', 'scroll', 'focusin', 'input', 'change'];
+    
+    userEventTypes.forEach(eventType => {
+      document.addEventListener(eventType, (e) => {
+        if (this.systemOnlyMode) {
+          // Log blocked user interaction
+          console.warn(`Blocked user ${eventType} event - System operates in automated mode only`);
+          
+          // Prevent the event if it's an input/form element
+          if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT')) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.target.blur(); // Remove focus
+          }
+          
+          return false;
+        }
+      }, true); // Use capture phase to block early
     });
 
-    document.addEventListener('keypress', () => {
-      if (!this.isTracking) return;
-      this.engagementTracker.recordInteraction('keypress');
-    });
+    // System-generated interactions only
+    this.setupSystemDataCollection();
+  }
 
-    document.addEventListener('scroll', () => {
+  setupSystemDataCollection() {
+    // Automated data collection every 30 seconds
+    setInterval(() => {
       if (!this.isTracking) return;
-      this.engagementTracker.recordInteraction('scroll');
-    });
-
-    // Track assignment interactions
-    document.addEventListener('focusin', (e) => {
-      if (!this.isTracking) return;
-      if (e.target.classList.contains('assignment-input')) {
-        const assignmentId = e.target.dataset.assignmentId;
-        this.assignmentTracker.startAssignment(assignmentId);
-      }
-    });
-
-    // Track assignment revisions
-    document.addEventListener('input', (e) => {
-      if (!this.isTracking) return;
-      if (e.target.classList.contains('assignment-input')) {
-        const assignmentId = e.target.dataset.assignmentId;
-        this.assignmentTracker.recordRevision(assignmentId, e.target.value);
-      }
-    });
+      
+      const systemMetrics = this.validator.generateSystemData('automated_metrics', {
+        browserMetrics: {
+          memoryUsage: performance.memory ? performance.memory.usedJSHeapSize : null,
+          timing: performance.timing ? performance.timing.loadEventEnd - performance.timing.navigationStart : null
+        },
+        sessionMetrics: this.studySessionTracker.getSessionStats(),
+        automated: true
+      });
+      
+      this.dataSyncService.queueData(systemMetrics);
+    }, 30000);
   }
 
   getAnalytics() {

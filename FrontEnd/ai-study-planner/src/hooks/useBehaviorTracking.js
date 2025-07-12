@@ -25,7 +25,7 @@ export function useBehaviorTracking(courses) {
     
     // Track page visit
     trackUserAction('page_visit', { timestamp: new Date().toISOString() });
-  }, [courses]);
+  }, [courses]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const initializeBehaviorTracking = () => {
     const defaultBehavior = {
@@ -82,6 +82,9 @@ export function useBehaviorTracking(courses) {
   const calculateBehaviorMetrics = (data, currentCourses) => {
     if (!data) return;
     
+    // Ensure currentCourses is an array
+    const safeCourses = currentCourses || [];
+    
     // Study consistency calculation
     const studySessions = data.studySessions || [];
     let studyConsistency = 0;
@@ -106,8 +109,8 @@ export function useBehaviorTracking(courses) {
       studyConsistency = 30; // Only one session recorded
     }
     
-    // Assignment completion ratio
-    const assignments = currentCourses.flatMap(c => c.assignments || []);
+    // Assignment completion ratio - safely handle undefined courses
+    const assignments = safeCourses.flatMap(c => c.assignments || []);
     const totalAssignments = assignments.length;
     const assignmentSubmissions = data.assignmentSubmissions || [];
     
@@ -154,7 +157,9 @@ export function useBehaviorTracking(courses) {
   };
 
   const recordStudySession = (courseId, duration) => {
-    const course = courses.find(c => c.id === courseId);
+    // Safely handle undefined courses
+    const safeCourses = courses || [];
+    const course = safeCourses.find(c => c.id === courseId);
     if (!course) return;
     
     trackUserAction('study_session', {
@@ -167,7 +172,14 @@ export function useBehaviorTracking(courses) {
   };
 
   return {
-    behaviorMetrics,
+    metrics: {
+      plannerUsage: 0,
+      studyConsistency: 0,
+      deadlineAdherence: 0,
+      procrastinationLevel: 5,
+      ...behaviorMetrics
+    },
+    sessions: behaviorData?.studySessions || [],
     trackUserAction,
     recordStudySession,
     showBehaviorModal,

@@ -76,8 +76,25 @@ function CourseDetails() {
     fetchCourseData();
   }, [courseId, navigate, addActivity]);
 
-  const handleQuizAnswerWrapper = (selectedOption) => {
-    handleQuizAnswer(selectedOption, quiz.questions.length, quiz);
+  const handleAnswerSelect = (selectedOption) => {
+    const additionalData = {
+      quizTitle: `${courseData?.name || courseData?.title || 'Course'} Quiz`,
+      courseId: courseData?.id || null,
+      courseName: courseData?.name || courseData?.title || null,
+      courseCode: courseData?.code || null,
+      difficulty: 'Medium',
+      topic: courseData?.subject || 'General',
+      fileName: uploadedFile?.name || null,
+      uploadDate: uploadedFile?.uploadDate || new Date().toISOString(),
+      quizSource: 'slide_upload',
+      triggerCWAAnalysis: true,
+      metadata: {
+        slideCount: courseData?.slides?.length || 0,
+        fileType: uploadedFile?.type || null
+      }
+    };
+    
+    handleQuizAnswer(selectedOption, quiz.questions.length, quiz, additionalData);
   };
 
   const handleFileSelectWrapper = (event) => {
@@ -112,7 +129,7 @@ function CourseDetails() {
           <QuizSection
             quiz={quiz}
             currentQuestionIndex={currentQuestionIndex}
-            onAnswerSelect={handleQuizAnswerWrapper}
+            onAnswerSelect={handleAnswerSelect}
           />
         )}
 

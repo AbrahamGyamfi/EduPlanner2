@@ -1,4 +1,6 @@
-// Data Synchronization Service
+// Data Synchronization Service - System Only Mode
+import SystemDataValidator from '../security/SystemDataValidator';
+
 class DataSyncService {
   constructor() {
     this.syncQueue = [];
@@ -6,19 +8,32 @@ class DataSyncService {
     this.syncInterval = 5 * 60 * 1000; // 5 minutes
     this.maxQueueSize = 50;
     this.isSyncing = false;
+    this.validator = new SystemDataValidator();
   }
 
   queueData(data) {
+    // Validate that data comes from system source only
+    if (!this.validator.validateSystemSource(data, data.source || 'unknown')) {
+      console.warn('Rejected non-system data in queue:', data);
+      return false;
+    }
+
+    // Sanitize the data
+    const sanitizedData = this.validator.sanitizeSystemData(data);
+    
     this.syncQueue.push({
-      ...data,
+      ...sanitizedData,
       timestamp: Date.now(),
       deviceInfo: this.getDeviceInfo(),
-      environmentInfo: this.getEnvironmentInfo()
+      environmentInfo: this.getEnvironmentInfo(),
+      systemValidated: true
     });
 
     if (this.syncQueue.length >= this.maxQueueSize) {
       this.sync();
     }
+    
+    return true;
   }
 
   getDeviceInfo() {
@@ -40,16 +55,32 @@ class DataSyncService {
   async sync() {
     if (this.isSyncing || this.syncQueue.length === 0) return;
 
+    // Filter out any non-system data that might have slipped through
+    const systemOnlyData = this.syncQueue.filter(item => 
+      item.systemValidated && 
+      item.source === 'system'
+    );
+
+    if (systemOnlyData.length === 0) {
+      console.warn('No valid system data to sync');
+      this.syncQueue = [];
+      return false;
+    }
+
     this.isSyncing = true;
     try {
       const response = await fetch('/api/sync-data', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'X-System-Auth': this.validator.systemSignature,
+          'X-Data-Source': 'system-only'
         },
         body: JSON.stringify({
-          data: this.syncQueue,
-          timestamp: new Date().toISOString()
+          data: systemOnlyData,
+          timestamp: new Date().toISOString(),
+          systemSignature: this.validator.systemSignature,
+          dataSource: 'system'
         })
       });
 
