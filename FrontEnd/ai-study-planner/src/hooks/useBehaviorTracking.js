@@ -12,73 +12,7 @@ export function useBehaviorTracking(courses = []) {
   });
   const [showBehaviorModal, setShowBehaviorModal] = useState(false);
 
-  useEffect(() => {
-    // Load saved behavior data
-    const savedBehavior = localStorage.getItem('cwa_behavior_data');
-    
-    if (savedBehavior) {
-      const parsedBehavior = JSON.parse(savedBehavior);
-      setBehaviorData(parsedBehavior);
-      calculateBehaviorMetrics(parsedBehavior, courses);
-    } else {
-      // Initialize with defaults
-      initializeBehaviorTracking();
-    }
-  }, [courses]);
-
-  const initializeBehaviorTracking = () => {
-    const defaultBehavior = {
-      studySessions: [],
-      assignmentSubmissions: [],
-      pageVisits: [],
-      actions: []
-    };
-    
-    setBehaviorData(defaultBehavior);
-    localStorage.setItem('cwa_behavior_data', JSON.stringify(defaultBehavior));
-  };
-
-  const trackUserAction = useCallback((actionType, actionData) => {
-    if (!behaviorData) return;
-    
-    const timestamp = new Date().toISOString();
-    const updatedBehavior = {...behaviorData};
-    
-    switch (actionType) {
-      case 'page_visit':
-        updatedBehavior.pageVisits = [
-          ...(updatedBehavior.pageVisits || []),
-          { timestamp, ...actionData }
-        ];
-        break;
-      
-      case 'assignment_added':
-        updatedBehavior.assignmentSubmissions = [
-          ...(updatedBehavior.assignmentSubmissions || []),
-          { timestamp, status: 'added', ...actionData }
-        ];
-        break;
-      
-      case 'study_session':
-        updatedBehavior.studySessions = [
-          ...(updatedBehavior.studySessions || []),
-          { timestamp, ...actionData }
-        ];
-        break;
-        
-      default:
-        updatedBehavior.actions = [
-          ...(updatedBehavior.actions || []),
-          { type: actionType, timestamp, ...actionData }
-        ];
-    }
-    
-    setBehaviorData(updatedBehavior);
-    localStorage.setItem('cwa_behavior_data', JSON.stringify(updatedBehavior));
-    calculateBehaviorMetrics(updatedBehavior, courses);
-  }, [behaviorData, courses]);
-
-  const calculateBehaviorMetrics = (data, currentCourses = []) => {
+  const calculateBehaviorMetrics = useCallback((data, currentCourses = []) => {
     if (!data) return;
     
     // Study consistency calculation
@@ -161,7 +95,73 @@ export function useBehaviorTracking(courses = []) {
       plannerUsage,
       deadlineAdherence
     });
+  }, []);
+
+  useEffect(() => {
+    // Load saved behavior data
+    const savedBehavior = localStorage.getItem('cwa_behavior_data');
+    
+    if (savedBehavior) {
+      const parsedBehavior = JSON.parse(savedBehavior);
+      setBehaviorData(parsedBehavior);
+      calculateBehaviorMetrics(parsedBehavior, courses);
+    } else {
+      // Initialize with defaults
+      initializeBehaviorTracking();
+    }
+  }, [courses, calculateBehaviorMetrics]);
+
+  const initializeBehaviorTracking = () => {
+    const defaultBehavior = {
+      studySessions: [],
+      assignmentSubmissions: [],
+      pageVisits: [],
+      actions: []
+    };
+    
+    setBehaviorData(defaultBehavior);
+    localStorage.setItem('cwa_behavior_data', JSON.stringify(defaultBehavior));
   };
+
+  const trackUserAction = useCallback((actionType, actionData) => {
+    if (!behaviorData) return;
+    
+    const timestamp = new Date().toISOString();
+    const updatedBehavior = {...behaviorData};
+    
+    switch (actionType) {
+      case 'page_visit':
+        updatedBehavior.pageVisits = [
+          ...(updatedBehavior.pageVisits || []),
+          { timestamp, ...actionData }
+        ];
+        break;
+      
+      case 'assignment_added':
+        updatedBehavior.assignmentSubmissions = [
+          ...(updatedBehavior.assignmentSubmissions || []),
+          { timestamp, status: 'added', ...actionData }
+        ];
+        break;
+      
+      case 'study_session':
+        updatedBehavior.studySessions = [
+          ...(updatedBehavior.studySessions || []),
+          { timestamp, ...actionData }
+        ];
+        break;
+        
+      default:
+        updatedBehavior.actions = [
+          ...(updatedBehavior.actions || []),
+          { type: actionType, timestamp, ...actionData }
+        ];
+    }
+    
+    setBehaviorData(updatedBehavior);
+    localStorage.setItem('cwa_behavior_data', JSON.stringify(updatedBehavior));
+    calculateBehaviorMetrics(updatedBehavior, courses);
+  }, [behaviorData, courses, calculateBehaviorMetrics]);
 
   const recordStudySession = (courseId, duration) => {
     if (!courses || !Array.isArray(courses)) return;
