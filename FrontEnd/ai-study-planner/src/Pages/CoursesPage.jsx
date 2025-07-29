@@ -4,6 +4,20 @@ import Sidebar from "../components/sidebar";
 import Navbar from '../components/PageHead';
 import CourseCard from '../components/CWA/CourseCard';
 import { toast } from 'react-hot-toast';
+import { 
+  calculateOverallProgress, 
+  updateAllCoursesProgress, 
+  useProgressTracking 
+} from '../utils/progressTracking';
+
+// UUID generation function (compatible with all browsers)
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 function CoursesPage() {
   const navigate = useNavigate();
@@ -33,17 +47,22 @@ function CoursesPage() {
     assignments: []
   });
   const [formErrors, setFormErrors] = useState({});
+  
+  // Use the custom progress tracking hook
+  const { overallProgress, courseProgress, updateProgress } = useProgressTracking();
 
   useEffect(() => {
     localStorage.setItem('courses', JSON.stringify(courses));
+    // Sync courses to CWA storage for analysis
+    localStorage.setItem('cwa_courses', JSON.stringify(courses));
+    
+    // Update progress for all courses when courses change
+    updateAllCoursesProgress();
   }, [courses]);
 
   // Calculate stats
   const activeCourses = courses.filter(course => course.status !== 'completed').length;
   const completedCourses = courses.filter(course => course.status === 'completed').length;
-  const overallProgress = courses.length > 0 
-    ? Math.round((courses.reduce((sum, course) => sum + (course.progress || 0), 0) / courses.length))
-    : 0;
 
   const handleAddCourse = (e) => {
     e.preventDefault();

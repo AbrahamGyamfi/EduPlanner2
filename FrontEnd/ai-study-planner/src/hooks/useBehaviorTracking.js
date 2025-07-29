@@ -1,12 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
-export function useBehaviorTracking(courses) {
+export function useBehaviorTracking(courses = []) {
   const [behaviorData, setBehaviorData] = useState(null);
   const [behaviorMetrics, setBehaviorMetrics] = useState({
     studyConsistency: 0,
     assignmentCompletion: 0,
     studyPatterns: [],
-    procrastinationLevel: 0
+    procrastinationLevel: 0,
+    plannerUsage: 0,
+    deadlineAdherence: 0
   });
   const [showBehaviorModal, setShowBehaviorModal] = useState(false);
 
@@ -22,9 +24,6 @@ export function useBehaviorTracking(courses) {
       // Initialize with defaults
       initializeBehaviorTracking();
     }
-    
-    // Track page visit
-    trackUserAction('page_visit', { timestamp: new Date().toISOString() });
   }, [courses]);
 
   const initializeBehaviorTracking = () => {
@@ -39,7 +38,7 @@ export function useBehaviorTracking(courses) {
     localStorage.setItem('cwa_behavior_data', JSON.stringify(defaultBehavior));
   };
 
-  const trackUserAction = (actionType, actionData) => {
+  const trackUserAction = useCallback((actionType, actionData) => {
     if (!behaviorData) return;
     
     const timestamp = new Date().toISOString();
@@ -77,9 +76,9 @@ export function useBehaviorTracking(courses) {
     setBehaviorData(updatedBehavior);
     localStorage.setItem('cwa_behavior_data', JSON.stringify(updatedBehavior));
     calculateBehaviorMetrics(updatedBehavior, courses);
-  };
+  }, [behaviorData, courses]);
 
-  const calculateBehaviorMetrics = (data, currentCourses) => {
+  const calculateBehaviorMetrics = (data, currentCourses = []) => {
     if (!data) return;
     
     // Study consistency calculation
@@ -107,7 +106,7 @@ export function useBehaviorTracking(courses) {
     }
     
     // Assignment completion ratio
-    const assignments = currentCourses.flatMap(c => c.assignments || []);
+    const assignments = (currentCourses || []).flatMap(c => c.assignments || []);
     const totalAssignments = assignments.length;
     const assignmentSubmissions = data.assignmentSubmissions || [];
     
@@ -115,8 +114,17 @@ export function useBehaviorTracking(courses) {
       ? Math.min(100, (assignmentSubmissions.length / totalAssignments) * 100)
       : 0;
     
-    // Procrastination level
-    const procrastinationLevel = 5; // Default middle value
+    // Procrastination level (inverse of consistency)
+    const procrastinationLevel = Math.max(1, 10 - Math.floor(studyConsistency / 10));
+    
+    // Planner usage - based on page visits and actions
+    const pageVisits = data.pageVisits || [];
+    const actions = data.actions || [];
+    const totalInteractions = pageVisits.length + actions.length;
+    const plannerUsage = Math.min(100, totalInteractions * 5); // 5% per interaction, capped at 100%
+    
+    // Deadline adherence - based on assignment completion and timing
+    const deadlineAdherence = assignmentCompletion; // For now, use assignment completion as proxy
     
     // Study patterns analysis
     const studyPatterns = [];
@@ -149,11 +157,15 @@ export function useBehaviorTracking(courses) {
       studyConsistency,
       assignmentCompletion,
       procrastinationLevel,
-      studyPatterns
+      studyPatterns,
+      plannerUsage,
+      deadlineAdherence
     });
   };
 
   const recordStudySession = (courseId, duration) => {
+    if (!courses || !Array.isArray(courses)) return;
+    
     const course = courses.find(c => c.id === courseId);
     if (!course) return;
     
@@ -167,7 +179,8 @@ export function useBehaviorTracking(courses) {
   };
 
   return {
-    behaviorMetrics,
+    metrics: behaviorMetrics,
+    sessions: behaviorData?.studySessions || [],
     trackUserAction,
     recordStudySession,
     showBehaviorModal,

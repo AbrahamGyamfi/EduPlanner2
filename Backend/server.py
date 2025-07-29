@@ -12,11 +12,14 @@ from werkzeug.utils import secure_filename
 from PyPDF2 import PdfReader
 import logging
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from io import BytesIO
 import google.generativeai as genai
 from PIL import Image
 from pptx import Presentation
+import re
+from functools import wraps
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(
@@ -64,6 +67,11 @@ client = MongoClient(mongodb_uri)
 db = client[database_name]  # Database Name
 users_collection = db.users  # Collection Name
 
+# Rate limiting storage
+login_attempts = defaultdict(list)
+RATE_LIMIT_WINDOW = 300  # 5 minutes in seconds
+MAX_ATTEMPTS_PER_WINDOW = 5
+
 # Add CORS headers to all responses
 @app.after_request
 def after_request(response):
@@ -79,55 +87,206 @@ def handle_preflight(filename):
     response = jsonify({'message': 'OK'})
     return response, 200
 
+# Password validation function
+def validate_password(password):
+    """Validate password strength"""
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    if not re.search(r'[A-Z]', password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if not re.search(r'[a-z]', password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if not re.search(r'\d', password):
+        return False, "Password must contain at least one number"
+    
+    if not re.search(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]', password):
+        return False, "Password must contain at least one special character"
+    
+    return True, "Password is valid"
+
+# Rate limiting decorator
+def rate_limit(max_attempts=MAX_ATTEMPTS_PER_WINDOW, window=RATE_LIMIT_WINDOW):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.environ.get('REMOTE_ADDR', 'unknown'))
+            current_time = datetime.now()
+            
+            # Clean old attempts
+            login_attempts[client_ip] = [
+                attempt_time for attempt_time in login_attempts[client_ip]
+                if (current_time - attempt_time).total_seconds() < window
+            ]
+            
+            # Check if rate limit exceeded
+            if len(login_attempts[client_ip]) >= max_attempts:
+                logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+                return jsonify({
+                    "status": "error",
+                    "message": "Too many login attempts. Please try again later."
+                }), 429
+            
+            # Record this attempt
+            login_attempts[client_ip].append(current_time)
+            
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+# Input validation function
+def validate_input(data, required_fields):
+    """Validate input data"""
+    errors = []
+    
+    for field in required_fields:
+        if field not in data or not data[field] or not data[field].strip():
+            errors.append(f"{field} is required")
+        elif len(data[field].strip()) > 255:  # Prevent extremely long inputs
+            errors.append(f"{field} is too long (max 255 characters)")
+    
+    return errors
+
 # Signup Route
 @app.route("/signup", methods=["POST"])
 def signup():
-    data = request.json
-    firstname = data.get("firstname")
-    lastname = data.get("lastname")
-    studentId = data.get("studentId")
-    email = data.get("email")
-    password = data.get("password")
-
-    if users_collection.find_one({"email": email}):
-        return jsonify({"error": "Email already exists"}), 400
-
-    hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
-
-    users_collection.insert_one({
-        "firstname": firstname,
-        "lastname": lastname,
-        "studentId": studentId,
-        "email": email,
-        "password": hashed_pw
-    })
-
-    return jsonify({"message": "User created successfully"}), 201
-
-# Login Route (No JWT, Simple Authentication)
-@app.route("/login", methods=["POST"])
-def login():
-    data = request.get_json()
-    email = data.get("email")
-    password = data.get("password")
-
-    user = users_collection.find_one({"email": email})
-
-    if user and bcrypt.checkpw(password.encode("utf-8"), user["password"]):
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+        
+        # Validate required fields
+        required_fields = ["firstname", "lastname", "studentId", "email", "password"]
+        validation_errors = validate_input(data, required_fields)
+        
+        # Handle both 'name' field (from frontend) and separate firstname/lastname
+        if 'name' in data and not data.get('firstname'):
+            # Split full name into first and last
+            name_parts = data['name'].strip().split()
+            data['firstname'] = name_parts[0] if name_parts else ''
+            data['lastname'] = ' '.join(name_parts[1:]) if len(name_parts) > 1 else ''
+        
+        if validation_errors:
+            return jsonify({"error": "; ".join(validation_errors)}), 400
+        
+        firstname = data.get("firstname").strip()
+        lastname = data.get("lastname").strip()
+        studentId = data.get("studentId").strip()
+        email = data.get("email").strip().lower()
+        password = data.get("password")
+        
+        # Validate email format
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return jsonify({"error": "Invalid email format"}), 400
+        
+        # Validate password strength
+        is_valid, password_message = validate_password(password)
+        if not is_valid:
+            return jsonify({"error": password_message}), 400
+        
+        # Check if email already exists
+        if users_collection.find_one({"email": email}):
+            return jsonify({"error": "Email already exists"}), 400
+        
+        # Check if student ID already exists
+        if users_collection.find_one({"studentId": studentId}):
+            return jsonify({"error": "Student ID already exists"}), 400
+        
+        # Hash password
+        hashed_pw = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt())
+        
+        # Create user
+        user_data = {
+            "firstname": firstname,
+            "lastname": lastname,
+            "studentId": studentId,
+            "email": email,
+            "password": hashed_pw,
+            "created_at": datetime.now(),
+            "is_active": True
+        }
+        
+        result = users_collection.insert_one(user_data)
+        
+        logger.info(f"User created successfully: {email}")
+        
         return jsonify({
             "status": "success",
-            "message": "Logged in successfully",
-            "user": {
-                "firstname": user.get("firstname"),
-                "lastname": user.get("lastname"),
-                "email": user.get("email")
-            }
-        }), 200
-    else:
-        return jsonify({
-            "status": "fail",
-            "message": "Invalid credentials"
-        }), 401
+            "message": "User created successfully",
+            "user_id": str(result.inserted_id)
+        }), 201
+        
+    except Exception as e:
+        logger.error(f"Signup error: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+# Login Route with Rate Limiting
+@app.route("/login", methods=["POST"])
+@rate_limit()
+def login():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        # Validate required fields
+        required_fields = ["email", "password"]
+        validation_errors = validate_input(data, required_fields)
+        
+        if validation_errors:
+            return jsonify({"status": "error", "message": "; ".join(validation_errors)}), 400
+        
+        email = data.get("email").strip().lower()
+        password = data.get("password")
+        
+        # Validate email format
+        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(email_pattern, email):
+            return jsonify({"status": "error", "message": "Invalid email format"}), 400
+        
+        # Find user
+        user = users_collection.find_one({"email": email})
+        
+        if user and bcrypt.checkpw(password.encode("utf-8"), user["password"]):
+            # Check if user account is active
+            if not user.get("is_active", True):
+                return jsonify({
+                    "status": "error",
+                    "message": "Account is deactivated. Please contact support."
+                }), 403
+            
+            # Update last login
+            users_collection.update_one(
+                {"_id": user["_id"]},
+                {"$set": {"last_login": datetime.now()}}
+            )
+            
+            logger.info(f"Successful login for user: {email}")
+            
+            return jsonify({
+                "status": "success",
+                "message": "Logged in successfully",
+                "user": {
+                    "id": str(user["_id"]),
+                    "firstname": user.get("firstname"),
+                    "lastname": user.get("lastname"),
+                    "email": user.get("email"),
+                    "studentId": user.get("studentId")
+                }
+            }), 200
+        else:
+            logger.warning(f"Failed login attempt for email: {email}")
+            return jsonify({
+                "status": "fail",
+                "message": "Invalid credentials"
+            }), 401
+            
+    except Exception as e:
+        logger.error(f"Login error: {str(e)}")
+        return jsonify({"status": "error", "message": "Internal server error"}), 500
 
 # Configure Gemini API from environment variables
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')

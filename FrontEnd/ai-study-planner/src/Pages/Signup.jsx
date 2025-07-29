@@ -22,12 +22,31 @@ const Signup = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
+  const [passwordStrength, setPasswordStrength] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false
+  });
   const navigate = useNavigate();
 
   // Handle input changes
   const handleChange = (e) => {
-    setForm({ ...form, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setForm({ ...form, [name]: value });
     setError("");
+    
+    // Update password strength indicators
+    if (name === 'password') {
+      setPasswordStrength({
+        length: value.length >= 8,
+        uppercase: /[A-Z]/.test(value),
+        lowercase: /[a-z]/.test(value),
+        number: /\d/.test(value),
+        special: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(value)
+      });
+    }
   };
 
   // Handle form submission
@@ -36,20 +55,64 @@ const Signup = () => {
     setError("");
     setSuccess(false);
 
+    // Client-side validation
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
+
+    if (form.password.length < 8) {
+      setError("Password must be at least 8 characters long.");
+      return;
+    }
+
     setLoading(true);
 
-    // Simulate async signup (replace with real API call)
-    setTimeout(() => {
+    try {
+      // Split name into first and last name
+      const nameParts = form.name.trim().split(' ');
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || '';
+      
+      // Generate a student ID if not provided
+      const studentId = `STU${Date.now().toString().slice(-6)}`;
+
+      const signupData = {
+        firstname: firstName,
+        lastname: lastName,
+        studentId: studentId,
+        email: form.email.trim(),
+        password: form.password
+      };
+
+      console.log('Sending signup request:', { ...signupData, password: '***' });
+
+      const response = await fetch("http://127.0.0.1:5000/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json"
+        },
+        body: JSON.stringify(signupData)
+      });
+
+      const data = await response.json();
+      console.log('Signup response:', data);
+
+      if (response.ok && data.status === "success") {
+        setSuccess(true);
+        setTimeout(() => {
+          navigate("/login");
+        }, 1500);
+      } else {
+        setError(data.error || data.message || "Signup failed. Please try again.");
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      setError("Network error. Please check your connection and try again.");
+    } finally {
       setLoading(false);
-      setSuccess(true);
-      setTimeout(() => {
-        navigate("/login");
-      }, 1200); // Wait a bit to show success message
-    }, 1800);
+    }
   };
 
   return (
@@ -205,6 +268,36 @@ const Signup = () => {
               )}
             </button>
           </div>
+          
+          {/* Password Strength Indicator */}
+          {form.password && (
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 mb-2">Password Requirements:</p>
+              <div className="space-y-1">
+                <div className={`text-xs flex items-center ${passwordStrength.length ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className="mr-2">{passwordStrength.length ? '✓' : '○'}</span>
+                  At least 8 characters
+                </div>
+                <div className={`text-xs flex items-center ${passwordStrength.uppercase ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className="mr-2">{passwordStrength.uppercase ? '✓' : '○'}</span>
+                  One uppercase letter
+                </div>
+                <div className={`text-xs flex items-center ${passwordStrength.lowercase ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className="mr-2">{passwordStrength.lowercase ? '✓' : '○'}</span>
+                  One lowercase letter
+                </div>
+                <div className={`text-xs flex items-center ${passwordStrength.number ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className="mr-2">{passwordStrength.number ? '✓' : '○'}</span>
+                  One number
+                </div>
+                <div className={`text-xs flex items-center ${passwordStrength.special ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className="mr-2">{passwordStrength.special ? '✓' : '○'}</span>
+                  One special character
+                </div>
+              </div>
+            </div>
+          )}
+          
           <div className="relative">
             <label
               className="block text-gray-700 font-medium mb-1"
