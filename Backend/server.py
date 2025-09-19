@@ -6,19 +6,29 @@ This module initializes the Flask application and registers all component routes
 import os
 import logging
 import sys
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 from flask_swagger import swagger
 from dotenv import load_dotenv
 
-# Configure logging
+#############################################
+# Logging Configuration (Render friendly)
+# Writes to stdout (captured by Render) and optionally to file if ENABLE_FILE_LOGS=true
+#############################################
+log_level = os.getenv('LOG_LEVEL', 'INFO').upper()
+
+handlers = [logging.StreamHandler(sys.stdout)]
+if os.getenv('ENABLE_FILE_LOGS', '').lower() in ('1', 'true', 'yes'):
+    # Avoid crashes if filesystem is read-only; wrap in try
+    try:
+        handlers.append(logging.FileHandler('app.log'))
+    except Exception:
+        pass
+
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-    handlers=[
-        logging.FileHandler('app.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
+    level=getattr(logging, log_level, logging.INFO),
+    format='%(asctime)s [%(levelname)s] %(name)s - %(message)s',
+    handlers=handlers
 )
 
 # Suppress pymongo debug messages
@@ -65,16 +75,26 @@ def create_app():
     def index():
         return jsonify({
             "status": "success",
-            "message": "EduMaster API is running!",
+            "message": "EduPlanner API is running!",
             "version": "2.0.0"
         })
     
-    # Add CORS headers to all responses
+    # Dynamic CORS handling (override static header)
+    allowed_origins = [o.strip() for o in os.getenv('CORS_ORIGINS', 'http://localhost:3000').split(',') if o.strip()]
+
     @app.after_request
     def after_request(response):
-        response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        origin = request.headers.get('Origin')
+        if origin and (origin in allowed_origins or '*' in allowed_origins):
+            response.headers['Access-Control-Allow-Origin'] = origin if origin in allowed_origins else '*'
+        else:
+            # Fallback for local dev
+            if 'http://localhost:3000' in allowed_origins:
+                response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+        response.headers['Vary'] = 'Origin'
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
         response.headers['Access-Control-Max-Age'] = '3600'
         return response
     
@@ -241,6 +261,7 @@ def create_app():
 app = create_app()
 
 if __name__ == '__main__':
-    # Get port from environment variable or use default
+    # Local/dev server only. In production (Render) use gunicorn: gunicorn --bind 0.0.0.0:$PORT server:app
     port = int(os.getenv('PORT', 5000))
-    app.run(debug=app.config['DEBUG'], port=port)
+    host = os.getenv('HOST', '0.0.0.0')
+    app.run(debug=app.config['DEBUG'], port=port, host=host)
