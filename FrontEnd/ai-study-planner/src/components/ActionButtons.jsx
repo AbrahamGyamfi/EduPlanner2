@@ -1,14 +1,34 @@
 import React from 'react';
 
-const ActionButtons = ({ uploadedFile, loading, onGenerateSummary, onGenerateQuiz }) => {
-  if (!uploadedFile) return null;
+const ActionButtons = ({ 
+  uploadedFiles, 
+  loading, 
+  onGenerateSummary, 
+  onGenerateQuiz, 
+  onShowFileSelector,
+  onShowQuizTypeSelector
+}) => {
+  if (!uploadedFiles || uploadedFiles.length === 0) return null;
+  
+  const handleSummaryClick = () => {
+    if (uploadedFiles.length === 1) {
+      onGenerateSummary();
+    } else {
+      onShowFileSelector('summary');
+    }
+  };
+  
+  const handleQuizClick = () => {
+    // Always show quiz type selector first
+    onShowQuizTypeSelector();
+  };
 
   return (
     <div className="px-4 mt-6 flex justify-center">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
         {/* Summary Generation Card */}
         <div 
-          onClick={loading ? undefined : onGenerateSummary}
+          onClick={loading ? undefined : handleSummaryClick}
           className={`bg-white rounded-2xl shadow-xl p-6 cursor-pointer transition-all duration-300 transform hover:scale-105 hover:shadow-2xl border-2 border-transparent hover:border-blue-300 ${
             loading ? 'opacity-50 cursor-not-allowed' : ''
           }`}
@@ -47,7 +67,7 @@ const ActionButtons = ({ uploadedFile, loading, onGenerateSummary, onGenerateQui
 
         {/* Quiz Generation Card */}
         <div 
-          onClick={loading ? undefined : onGenerateQuiz}
+          onClick={loading ? undefined : handleQuizClick}
           className={`bg-white rounded-2xl shadow-xl p-6 cursor-pointer transition-all duration-300 transform hover:scale-105 hover:shadow-2xl border-2 border-transparent hover:border-purple-300 ${
             loading ? 'opacity-50 cursor-not-allowed' : ''
           }`}

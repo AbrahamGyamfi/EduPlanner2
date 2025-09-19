@@ -33,7 +33,7 @@ export const calculateCourseProgress = (course) => {
   progressPoints += quizProgress * PROGRESS_WEIGHTS.quizzes;
 
   // Slide/Material progress (20% weight)
-  const slideProgress = calculateSlideProgress(course.slides || []);
+  const slideProgress = calculateSlideProgress(course.slides || [], course.id);
   progressPoints += slideProgress * PROGRESS_WEIGHTS.slides;
 
   // Activity progress (10% weight) - get from activity history
@@ -87,21 +87,54 @@ export const calculateQuizProgress = (courseId) => {
 };
 
 // Calculate slide/material upload progress
-export const calculateSlideProgress = (slides) => {
-  if (!slides || slides.length === 0) return 0;
+export const calculateSlideProgress = (slides, courseId) => {
+  // Try to get uploaded files from localStorage
+  let uploadedFiles = [];
+  try {
+    const storedFiles = localStorage.getItem(`uploaded_files_${courseId}`);
+    if (storedFiles) {
+      uploadedFiles = JSON.parse(storedFiles);
+    }
+  } catch (error) {
+    console.error('Error loading uploaded files:', error);
+  }
   
-  // Base progress for having slides
-  const baseProgress = Math.min(slides.length * 15, 60); // Max 60 points for slides
+  // Use uploaded files if available, otherwise fall back to slides array
+  const filesToAnalyze = uploadedFiles.length > 0 ? uploadedFiles : (slides || []);
+  
+  if (filesToAnalyze.length === 0) return 0;
+  
+  // Base progress for having slides (15 points per file, max 60)
+  const baseProgress = Math.min(filesToAnalyze.length * 15, 60);
   
   // Bonus for variety of file types
-  const fileTypes = new Set(slides.map(slide => {
-    const extension = slide.split('.').pop().toLowerCase();
-    return extension;
+  const fileTypes = new Set(filesToAnalyze.map(file => {
+    if (typeof file === 'string') {
+      return file.split('.').pop().toLowerCase();
+    } else if (file.filename) {
+      return file.filename.split('.').pop().toLowerCase(); 
+    } else if (file.fileType) {
+      return file.fileType.split('/').pop().toLowerCase();
+    }
+    return 'unknown';
   }));
   
   const varietyBonus = Math.min(fileTypes.size * 10, 40); // Max 40 bonus for variety
   
-  return Math.min(baseProgress + varietyBonus, 100);
+  // Additional bonus for file size and content quality
+  let qualityBonus = 0;
+  if (uploadedFiles.length > 0) {
+    const totalSize = uploadedFiles.reduce((sum, file) => sum + (file.fileSize || 0), 0);
+    const avgTextLength = uploadedFiles.filter(f => f.extractedText)
+      .reduce((sum, file) => sum + file.extractedText.length, 0) / uploadedFiles.length;
+    
+    // Bonus for substantial content (max 20 points)
+    if (avgTextLength > 1000) qualityBonus += 10;
+    if (avgTextLength > 5000) qualityBonus += 10;
+    if (totalSize > 1024 * 1024) qualityBonus += 5; // 1MB+
+  }
+  
+  return Math.min(baseProgress + varietyBonus + qualityBonus, 100);
 };
 
 // Calculate activity-based progress

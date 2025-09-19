@@ -12,7 +12,8 @@ import {
   FileText,
   Award,
 } from "lucide-react";
-import quizResultService from "../../services/QuizResultService"
+import quizResultService from "../../services/QuizResultService";
+import behavioralAnalyticsService from "../../services/behavioralAnalyticsService";
 
 // Generate sample quiz data based on registered courses
 const generateSampleQuizResults = (userCourses) => {
@@ -289,60 +290,130 @@ export default function EnhancedPerformanceAnalysis({
   theme,
 }) {
   const [currentBehaviorData, setCurrentBehaviorData] = useState(behaviorData)
+  const [realBehaviorData, setRealBehaviorData] = useState(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [selectedView, setSelectedView] = useState("overview")
   const [realQuizResults, setRealQuizResults] = useState([])
-  const [isLoadingQuizData, setIsLoadingQuizData] = useState(false)
-  const [quizDataError, setQuizDataError] = useState(null)
+  const [isLoadingData, setIsLoadingData] = useState(false)
+  const [dataError, setDataError] = useState(null)
+  const [prediction, setPrediction] = useState(null)
+  const [risks, setRisks] = useState([])
+  const [recommendations, setRecommendations] = useState([])
   
-  // Load real quiz data from backend
+  // Load real behavioral and quiz data from backend
   useEffect(() => {
-    const loadQuizData = async () => {
-      setIsLoadingQuizData(true)
-      setQuizDataError(null)
+    const loadRealData = async () => {
+      setIsLoadingData(true)
+      setDataError(null)
       
       try {
-        const userId = quizResultService.getCurrentUserId()
-        const quizData = await quizResultService.getQuizResults(userId, { limit: 20 })
+        // Try to get real behavioral analytics first
+        try {
+          const predictionData = await behavioralAnalyticsService.getAcademicPrediction()
+          
+          if (predictionData && predictionData.prediction) {
+            setPrediction(predictionData.prediction)
+            setRecommendations(predictionData.recommendations || [])
+            setRisks(predictionData.risks || [])
+            
+            // Extract behavioral data from the analytics
+            const analyticsData = predictionData.behavioral_data || {}
+            if (analyticsData.summary) {
+              setRealBehaviorData({
+                studyHours: analyticsData.summary.study_hours_per_week || 0,
+                scheduleFollowing: analyticsData.summary.schedule_following_rate || 50,
+                taskCompletion: analyticsData.summary.task_completion_rate || 50,
+                procrastination: analyticsData.summary.procrastination_level || 50,
+                focusLevel: analyticsData.summary.focus_level || 50,
+                helpSeeking: analyticsData.summary.help_seeking_behavior || 50
+              })
+            }
+            
+            console.log('Loaded real behavioral analytics with prediction')
+          }
+        } catch (behaviorError) {
+          console.log('Behavioral analytics not available, falling back to consolidated metrics')
+          
+          try {
+            // Fallback to consolidated metrics
+            const consolidatedData = await behavioralAnalyticsService.getConsolidatedMetrics()
+            
+            if (consolidatedData.cwa_metrics) {
+              setRealBehaviorData(consolidatedData.cwa_metrics)
+              console.log('Loaded consolidated behavioral metrics')
+            }
+          } catch (consolidatedError) {
+            console.log('Consolidated metrics not available, trying real-time data')
+            
+            try {
+              // Final fallback to real-time behavioral data
+              const realtimeData = await behavioralAnalyticsService.getRealTimeBehavioralData()
+              setRealBehaviorData(realtimeData)
+              console.log('Loaded real-time behavioral data')
+            } catch (realtimeError) {
+              console.log('No real behavioral data available, using mock data')
+            }
+          }
+        }
         
-        if (quizData && quizData.quizResults) {
-          setRealQuizResults(quizData.quizResults)
-          console.log('Loaded quiz results:', quizData.quizResults.length)
-        } else {
-          console.log('No quiz results found, will use generated data')
+        // Load quiz data separately
+        try {
+          const userId = quizResultService.getCurrentUserId()
+          const quizData = await quizResultService.getQuizResults(userId, { limit: 20 })
+          
+          if (quizData && quizData.quizResults) {
+            setRealQuizResults(quizData.quizResults)
+            console.log('Loaded quiz results:', quizData.quizResults.length)
+          } else {
+            console.log('No quiz results found, will use generated data')
+            setRealQuizResults([])
+          }
+        } catch (quizError) {
+          console.error('Error loading quiz data:', quizError)
           setRealQuizResults([])
         }
+        
       } catch (error) {
-        console.error('Error loading quiz data:', error)
-        setQuizDataError('Failed to load quiz data')
-        setRealQuizResults([]) // Fallback to empty array
+        console.error('Error loading real data:', error)
+        setDataError('Failed to load behavioral data')
       } finally {
-        setIsLoadingQuizData(false)
+        setIsLoadingData(false)
       }
     }
     
-    loadQuizData()
+    loadRealData()
   }, [])
+  
+  // Use real behavioral data if available
+  const effectiveBehaviorData = realBehaviorData || currentBehaviorData
   
   // Use real quiz data if available, otherwise generate from registered courses
   const effectiveQuizResults = realQuizResults.length > 0 ? realQuizResults : 
     (quizResults && quizResults.length > 0 ? quizResults : generateSampleQuizResults(userCourses))
+    
   // Calculate quiz metrics
   const quizMetrics = useMemo(() => calculateQuizMetrics(effectiveQuizResults), [effectiveQuizResults])
-  // Calculate enhanced prediction
-  const prediction = useMemo(
-    () => calculateEnhancedPerformance(currentBehaviorData, quizMetrics),
-    [currentBehaviorData, quizMetrics],
+  
+  // Always calculate local prediction, risks, and recommendations using useMemo
+  const localPrediction = useMemo(
+    () => calculateEnhancedPerformance(effectiveBehaviorData, quizMetrics),
+    [effectiveBehaviorData, quizMetrics],
   )
-  // Get risks and recommendations
-  const risks = useMemo(
-    () => identifyEnhancedRisks(currentBehaviorData, quizMetrics),
-    [currentBehaviorData, quizMetrics],
+  
+  const localRisks = useMemo(
+    () => identifyEnhancedRisks(effectiveBehaviorData, quizMetrics),
+    [effectiveBehaviorData, quizMetrics],
   )
-  const recommendations = useMemo(
-    () => generateEnhancedRecommendations(currentBehaviorData, quizMetrics),
-    [currentBehaviorData, quizMetrics],
+  
+  const localRecommendations = useMemo(
+    () => generateEnhancedRecommendations(effectiveBehaviorData, quizMetrics),
+    [effectiveBehaviorData, quizMetrics],
   )
+  
+  // Use backend data if available, otherwise use locally calculated data
+  const effectivePrediction = prediction || localPrediction
+  const effectiveRisks = risks.length > 0 ? risks : localRisks
+  const effectiveRecommendations = recommendations.length > 0 ? recommendations : localRecommendations
   // Simulate data updates
   useEffect(() => {
     const interval = setInterval(() => {
@@ -367,16 +438,16 @@ export default function EnhancedPerformanceAnalysis({
             <div>
               <h1 className="text-3xl font-bold mb-2">Enhanced Performance Analysis</h1>
               <p className="opacity-75">Academic performance prediction based on study behavior + quiz results</p>
-              {isLoadingQuizData && (
+              {isLoadingData && (
                 <div className="flex items-center gap-2 mt-2 text-blue-600">
                   <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-sm">Loading quiz data...</span>
+                  <span className="text-sm">Loading behavioral data...</span>
                 </div>
               )}
-              {quizDataError && (
+              {dataError && (
                 <div className="flex items-center gap-2 mt-2 text-red-600">
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">{quizDataError}</span>
+                  <span className="text-sm">{dataError}</span>
                 </div>
               )}
               {realQuizResults.length > 0 && (
@@ -439,17 +510,17 @@ export default function EnhancedPerformanceAnalysis({
               <GraduationCap className="w-10 h-10" style={{ color: theme.secondary }} />
             </div>
             <div className="text-5xl font-bold mb-2" style={{ color: theme.secondary }}>
-              {prediction.performancePercentage}%
+              {effectivePrediction.performancePercentage}%
             </div>
             <div className="text-sm opacity-75 mb-4">Enhanced Performance Prediction</div>
             <div className="space-y-2">
-              <div className="text-2xl font-bold">{prediction.gpa}</div>
+              <div className="text-2xl font-bold">{effectivePrediction.gpa}</div>
               <div className="text-sm opacity-75">GPA (4.0 scale)</div>
-              <div className="text-xl font-bold mt-2">Grade: {prediction.grade}</div>
+              <div className="text-xl font-bold mt-2">Grade: {effectivePrediction.grade}</div>
             </div>
             <div className="mt-4 flex items-center justify-center gap-2 text-sm">
               <Target className="w-4 h-4" />
-              <span>{prediction.confidence}% Confidence</span>
+              <span>{effectivePrediction.confidence}% Confidence</span>
             </div>
             {/* Score Breakdown */}
             <div className="mt-6 p-4 rounded-lg bg-gray-50">
@@ -457,11 +528,11 @@ export default function EnhancedPerformanceAnalysis({
               <div className="space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span>Study Behavior:</span>
-                  <span className="font-semibold">{prediction.breakdown.behavioral}%</span>
+                  <span className="font-semibold">{effectivePrediction.breakdown?.behavioral || 0}%</span>
                 </div>
                 <div className="flex justify-between">
                   <span>Quiz Performance:</span>
-                  <span className="font-semibold">{prediction.breakdown.quizPerformance}%</span>
+                  <span className="font-semibold">{effectivePrediction.breakdown?.quizPerformance || 0}%</span>
                 </div>
               </div>
             </div>
@@ -513,12 +584,12 @@ export default function EnhancedPerformanceAnalysis({
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Study Hours/Week</span>
-                      <span className="font-bold">{currentBehaviorData.studyHours}h</span>
+                      <span className="font-bold">{effectiveBehaviorData.studyHours}h</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className="h-2 rounded-full bg-blue-500"
-                        style={{ width: `${Math.min((currentBehaviorData.studyHours / 40) * 100, 100)}%` }}
+                        style={{ width: `${Math.min((effectiveBehaviorData.studyHours / 40) * 100, 100)}%` }}
                       />
                     </div>
                   </div>
@@ -598,14 +669,14 @@ export default function EnhancedPerformanceAnalysis({
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Schedule Following</span>
-                      <span className="font-bold">{currentBehaviorData.scheduleFollowing}%</span>
+                      <span className="font-bold">{effectiveBehaviorData.scheduleFollowing}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className="h-2 rounded-full"
                         style={{
-                          width: `${currentBehaviorData.scheduleFollowing}%`,
-                          backgroundColor: currentBehaviorData.scheduleFollowing > 70 ? "#10b981" : "#f59e0b",
+                          width: `${effectiveBehaviorData.scheduleFollowing}%`,
+                          backgroundColor: effectiveBehaviorData.scheduleFollowing > 70 ? "#10b981" : "#f59e0b",
                         }}
                       />
                     </div>
@@ -613,14 +684,14 @@ export default function EnhancedPerformanceAnalysis({
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Task Completion</span>
-                      <span className="font-bold">{currentBehaviorData.taskCompletion}%</span>
+                      <span className="font-bold">{effectiveBehaviorData.taskCompletion}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className="h-2 rounded-full"
                         style={{
-                          width: `${currentBehaviorData.taskCompletion}%`,
-                          backgroundColor: currentBehaviorData.taskCompletion > 80 ? "#10b981" : "#f59e0b",
+                          width: `${effectiveBehaviorData.taskCompletion}%`,
+                          backgroundColor: effectiveBehaviorData.taskCompletion > 80 ? "#10b981" : "#f59e0b",
                         }}
                       />
                     </div>
@@ -628,14 +699,14 @@ export default function EnhancedPerformanceAnalysis({
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Focus Level</span>
-                      <span className="font-bold">{currentBehaviorData.focusLevel}%</span>
+                      <span className="font-bold">{effectiveBehaviorData.focusLevel}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className="h-2 rounded-full"
                         style={{
-                          width: `${currentBehaviorData.focusLevel}%`,
-                          backgroundColor: currentBehaviorData.focusLevel > 70 ? "#10b981" : "#f59e0b",
+                          width: `${effectiveBehaviorData.focusLevel}%`,
+                          backgroundColor: effectiveBehaviorData.focusLevel > 70 ? "#10b981" : "#f59e0b",
                         }}
                       />
                     </div>
@@ -643,14 +714,14 @@ export default function EnhancedPerformanceAnalysis({
                   <div className="p-4 border rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">Procrastination</span>
-                      <span className="font-bold">{currentBehaviorData.procrastination}%</span>
+                      <span className="font-bold">{effectiveBehaviorData.procrastination}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2">
                       <div
                         className="h-2 rounded-full"
                         style={{
-                          width: `${currentBehaviorData.procrastination}%`,
-                          backgroundColor: currentBehaviorData.procrastination < 40 ? "#10b981" : "#ef4444",
+                          width: `${effectiveBehaviorData.procrastination}%`,
+                          backgroundColor: effectiveBehaviorData.procrastination < 40 ? "#10b981" : "#ef4444",
                         }}
                       />
                     </div>
@@ -661,14 +732,14 @@ export default function EnhancedPerformanceAnalysis({
           </div>
         </div>
         {/* Risk Factors */}
-        {risks.length > 0 && (
+        {(effectiveRisks || []).length > 0 && (
           <div className="bg-white rounded-xl shadow-sm border p-6">
             <div className="flex items-center gap-3 mb-6">
               <AlertTriangle className="w-5 h-5 text-red-500" />
               <h3 className="text-lg font-semibold">Areas That Need Attention</h3>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {risks.map((risk, index) => (
+              {(effectiveRisks || []).map((risk, index) => (
                 <div
                   key={index}
                   className="p-4 rounded-lg border-l-4"
@@ -702,10 +773,10 @@ export default function EnhancedPerformanceAnalysis({
           <div className="flex items-center gap-3 mb-6">
             <Zap className="w-5 h-5" style={{ color: theme.secondary }} />
             <h3 className="text-lg font-semibold">Personalized Improvement Plan</h3>
-            <span className="text-sm opacity-75">({recommendations.length} recommendations)</span>
+            <span className="text-sm opacity-75">({(effectiveRecommendations || []).length} recommendations)</span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {recommendations.map((rec, index) => (
+            {(effectiveRecommendations || []).map((rec, index) => (
               <div key={index} className="p-4 border rounded-lg hover:shadow-md transition-shadow">
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
@@ -718,7 +789,7 @@ export default function EnhancedPerformanceAnalysis({
                     <div className="mb-3">
                       <div className="text-xs font-medium mb-1">Action Steps:</div>
                       <ul className="text-xs opacity-75 space-y-1">
-                        {rec.actionSteps.map((step, stepIndex) => (
+                        {(rec.actionSteps || []).map((step, stepIndex) => (
                           <li key={stepIndex} className="flex items-start gap-1">
                             <span className="w-1 h-1 rounded-full bg-gray-400 mt-1.5 flex-shrink-0"></span>
                             {step}
@@ -777,7 +848,7 @@ export default function EnhancedPerformanceAnalysis({
                 </p>
               </div>
             )}
-            {currentBehaviorData.taskCompletion > 80 && (
+            {effectiveBehaviorData.taskCompletion > 80 && (
               <div className="p-4 bg-green-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="w-5 h-5 text-green-600" />
@@ -786,7 +857,7 @@ export default function EnhancedPerformanceAnalysis({
                 <p className="text-sm text-green-700">You finish what you start - keep it up!</p>
               </div>
             )}
-            {currentBehaviorData.scheduleFollowing > 75 && (
+            {effectiveBehaviorData.scheduleFollowing > 75 && (
               <div className="p-4 bg-green-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="w-5 h-5 text-green-600" />
@@ -804,7 +875,7 @@ export default function EnhancedPerformanceAnalysis({
                 <p className="text-sm text-green-700">Your quiz scores are reliable and consistent.</p>
               </div>
             )}
-            {currentBehaviorData.studyHours > 25 && (
+            {effectiveBehaviorData.studyHours > 25 && (
               <div className="p-4 bg-green-50 rounded-lg">
                 <div className="flex items-center gap-2 mb-2">
                   <CheckCircle className="w-5 h-5 text-green-600" />

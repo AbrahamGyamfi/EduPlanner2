@@ -20,6 +20,8 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.17.0",
     "gapi-script": "^1.2.0",
+    "jspdf": "^3.0.2",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.294.0",
     "marked": "^11.0.0",
     "pdfjs-dist": "^5.3.31",

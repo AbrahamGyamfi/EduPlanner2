@@ -67,7 +67,34 @@ class CWAAnalysis {
 
   // Calculate individual course score with detailed metrics
   calculateCourseScore(course) {
-    if (!course.assignments || course.assignments.length === 0) return 0;
+    if (!course.assignments || course.assignments.length === 0) {
+      // If no assignments, consider progress and study time
+      const progress = course.progress || 0;
+      const studyTimeMinutes = (course.timeSpent || 0) / (1000 * 60); // Convert from milliseconds
+      
+      // Base score on progress and engagement
+      let baseScore = progress;
+      
+      // Bonus for consistent study time (up to 10% bonus)
+      if (studyTimeMinutes > 60) { // More than 1 hour
+        const timeBonus = Math.min(10, studyTimeMinutes / 60); // 1 point per hour, max 10
+        baseScore = Math.min(100, baseScore + timeBonus);
+      }
+      
+      return {
+        score: baseScore,
+        stats: {
+          total: 0,
+          completed: 0,
+          pending: 0,
+          averageScore: baseScore,
+          highestScore: baseScore,
+          lowestScore: baseScore,
+          studyTimeMinutes,
+          lastStudied: course.lastStudied
+        }
+      };
+    }
 
     let totalWeightedScore = 0;
     let totalWeight = 0;
@@ -77,26 +104,34 @@ class CWAAnalysis {
       pending: 0,
       averageScore: 0,
       highestScore: 0,
-      lowestScore: 100
+      lowestScore: 100,
+      studyTimeMinutes: (course.timeSpent || 0) / (1000 * 60),
+      lastStudied: course.lastStudied
     };
 
     course.assignments.forEach(assignment => {
-      const percentScore = (assignment.score / assignment.maxScore) * 100;
-      totalWeightedScore += percentScore * assignment.weight;
-      totalWeight += assignment.weight;
+      if (assignment.score !== undefined && assignment.maxScore > 0) {
+        const percentScore = (assignment.score / assignment.maxScore) * 100;
+        totalWeightedScore += percentScore * (assignment.weight || 1);
+        totalWeight += (assignment.weight || 1);
 
-      // Update assignment statistics
-      assignmentStats.completed++;
-      assignmentStats.averageScore += percentScore;
-      assignmentStats.highestScore = Math.max(assignmentStats.highestScore, percentScore);
-      assignmentStats.lowestScore = Math.min(assignmentStats.lowestScore, percentScore);
+        // Update assignment statistics
+        assignmentStats.completed++;
+        assignmentStats.averageScore += percentScore;
+        assignmentStats.highestScore = Math.max(assignmentStats.highestScore, percentScore);
+        assignmentStats.lowestScore = Math.min(assignmentStats.lowestScore, percentScore);
+      }
     });
 
-    assignmentStats.averageScore /= assignmentStats.completed;
+    if (assignmentStats.completed > 0) {
+      assignmentStats.averageScore /= assignmentStats.completed;
+    }
     assignmentStats.pending = assignmentStats.total - assignmentStats.completed;
 
+    const courseScore = totalWeight > 0 ? totalWeightedScore / totalWeight : (course.progress || 0);
+    
     return {
-      score: totalWeight > 0 ? totalWeightedScore / totalWeight : 0,
+      score: courseScore,
       stats: assignmentStats
     };
   }
