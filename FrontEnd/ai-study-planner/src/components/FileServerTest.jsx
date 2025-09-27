@@ -8,12 +8,12 @@ const FileServerTest = () => {
   const testEndpoints = [
     {
       name: 'Backend Health Check',
-      url: 'http://localhost:5000/',
+      url: 'https://eduplanner2-3wye.onrender.com/',
       method: 'GET'
     },
     {
       name: 'File List Endpoint',
-      url: 'http://localhost:5000/files?user_id=test',
+      url: 'https://eduplanner2-3wye.onrender.com/files?user_id=test',
       method: 'GET'
     }
   ];

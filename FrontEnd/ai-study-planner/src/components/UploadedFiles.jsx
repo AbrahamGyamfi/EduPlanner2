@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://eduplanner2-3wye.onrender.com';
 
 const UploadedFiles = ({ courseId }) => {
   const [files, setFiles] = useState([]);

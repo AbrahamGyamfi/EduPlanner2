@@ -41,7 +41,7 @@ const useRealTimeTracking = (userId, options = {}) => {
       abortControllerRef.current = new AbortController();
 
       const response = await fetch(
-        `https://eduplanner2-lntb.onrender.com/real-time-study-status/${userId}`,
+        `https://eduplanner2-3wye.onrender.com/real-time-study-status/${userId}`,
         {
           method: 'GET',
           headers: {
@@ -92,7 +92,7 @@ const useRealTimeTracking = (userId, options = {}) => {
   const fetchDashboardData = useCallback(async () => {
     try {
       const response = await fetch(
-        `https://eduplanner2-lntb.onrender.com/unified-dashboard-data/${userId}?days=${timeRange}`,
+        `https://eduplanner2-3wye.onrender.com/unified-dashboard-data/${userId}?days=${timeRange}`,
         {
           method: 'GET',
           headers: {
@@ -164,7 +164,7 @@ const useRealTimeTracking = (userId, options = {}) => {
   const updateSessionProgress = useCallback(async (sessionId, progressData) => {
     try {
       const response = await fetch(
-        `https://eduplanner2-lntb.onrender.com/slide-reading-session/${sessionId}`,
+        `https://eduplanner2-3wye.onrender.com/slide-reading-session/${sessionId}`,
         {
           method: 'PUT',
           headers: {
@@ -197,7 +197,7 @@ const useRealTimeTracking = (userId, options = {}) => {
   const completeActiveSession = useCallback(async (sessionId, completionData = {}) => {
     try {
       const response = await fetch(
-        `https://eduplanner2-lntb.onrender.com/slide-reading-session/${sessionId}/complete`,
+        `https://eduplanner2-3wye.onrender.com/slide-reading-session/${sessionId}/complete`,
         {
           method: 'PUT',
           headers: {

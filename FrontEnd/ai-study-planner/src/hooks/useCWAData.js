@@ -190,7 +190,7 @@ export function useCWAData() {
     try {
       // Try with API first
       try {
-        const response = await fetch('https://eduplanner2-lntb.onrender.com/api/analyze', {
+        const response = await fetch('https://eduplanner2-3wye.onrender.com/api/analyze', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

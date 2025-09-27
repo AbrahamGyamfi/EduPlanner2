@@ -90,9 +90,9 @@ const DirectSlideViewer = ({
       console.error('No uploadedFile provided to getFileUrl');
       return null;
     }
-    const url = `http://localhost:5000/serve-file/${encodeURIComponent(uploadedFile)}`;
+    const url = `https://eduplanner2-3wye.onrender.com/serve-file/${encodeURIComponent(uploadedFile)}`;
     // For debugging: also try port 5001
-    const testUrl = `http://localhost:5001/serve-file/${encodeURIComponent(uploadedFile)}`;
+    const testUrl = `https://eduplanner2-3wye.onrender.com/serve-file/${encodeURIComponent(uploadedFile)}`;
     console.log('Primary URL:', url);
     console.log('Test URL (port 5001):', testUrl);
     console.log('Generated file URL:', url);

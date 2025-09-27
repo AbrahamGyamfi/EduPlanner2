@@ -49,7 +49,7 @@ const LearningCheckpoints = ({ courseId, extractedText, filename }) => {
     if (!extractedText) return;
 
     try {
-      const response = await fetch('http://localhost:5000/generate-checkpoints', {
+      const response = await fetch('https://eduplanner2-3wye.onrender.com/generate-checkpoints', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

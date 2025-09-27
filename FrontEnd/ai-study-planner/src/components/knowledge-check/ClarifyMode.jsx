@@ -79,7 +79,7 @@ const ClarifyMode = ({ currentCourse }) => {
         content: msg.content
       }));
       
-      const response = await fetch('http://localhost:5000/ai-chat', {
+      const response = await fetch('https://eduplanner2-3wye.onrender.com/ai-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -202,7 +202,7 @@ const QuizMode = ({ currentCourse }) => {
     if (!courseId) return [];
     
     try {
-      const response = await fetch(`http://localhost:5000/course-files/${courseId}`);
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/course-files/${courseId}`);
       if (response.ok) {
         const data = await response.json();
         return data.files || [];
@@ -229,7 +229,7 @@ const QuizMode = ({ currentCourse }) => {
         try {
           console.log(`Generating questions for file: ${file.original_filename}`);
           
-          const response = await fetch('http://localhost:5000/generate-quiz', {
+          const response = await fetch('https://eduplanner2-3wye.onrender.com/generate-quiz', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -658,7 +658,7 @@ const QuizMode = ({ currentCourse }) => {
     try {
       console.log(`Generating questions based on course title: ${courseName}`);
       
-      const response = await fetch('http://localhost:5000/generate-dynamic-quiz', {
+      const response = await fetch('https://eduplanner2-3wye.onrender.com/generate-dynamic-quiz', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

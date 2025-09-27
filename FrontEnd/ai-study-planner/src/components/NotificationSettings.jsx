@@ -20,7 +20,7 @@ const NotificationSettings = ({ userId }) => {
 
   const loadPreferences = async () => {
     try {
-      const response = await fetch(`http://localhost:5000/notifications/preferences/${userId}`);
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/notifications/preferences/${userId}`);
       if (response.ok) {
         const data = await response.json();
         setPreferences(data.preferences);
@@ -37,7 +37,7 @@ const NotificationSettings = ({ userId }) => {
     setMessage('');
     
     try {
-      const response = await fetch(`http://localhost:5000/notifications/preferences/${userId}`, {
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/notifications/preferences/${userId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ const NotificationSettings = ({ userId }) => {
     setMessage('');
     
     try {
-      const response = await fetch(`http://localhost:5000/notifications/test/${userId}`, {
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/notifications/test/${userId}`, {
         method: 'POST'
       });
       

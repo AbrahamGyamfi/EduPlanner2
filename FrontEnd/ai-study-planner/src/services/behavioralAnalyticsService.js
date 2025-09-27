@@ -4,7 +4,7 @@
  * real activity-based academic performance predictions
  */
 
-const API_BASE_URL = 'https://eduplanner2-lntb.onrender.com';
+const API_BASE_URL = 'https://eduplanner2-3wye.onrender.com';
 
 class BehavioralAnalyticsService {
   

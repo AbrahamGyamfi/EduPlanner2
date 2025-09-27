@@ -17,7 +17,7 @@ export const useCourseActivities = (courseId) => {
       const userId = localStorage.getItem('userId') || 'default-user';
 
       // Fetch quiz results for this course
-      const quizResponse = await fetch(`https://eduplanner2-lntb.onrender.com/quiz-results/${userId}?course_id=${courseId}`);
+      const quizResponse = await fetch(`https://eduplanner2-3wye.onrender.com/quiz-results/${userId}?course_id=${courseId}`);
       let quizResults = [];
       
       if (quizResponse.ok) {
@@ -26,7 +26,7 @@ export const useCourseActivities = (courseId) => {
       }
 
       // Fetch summaries from Flask backend
-      const summaryResponse = await fetch(`https://eduplanner2-lntb.onrender.com/user-summaries/${userId}?course_id=${courseId}`);
+      const summaryResponse = await fetch(`https://eduplanner2-3wye.onrender.com/user-summaries/${userId}?course_id=${courseId}`);
       let courseSummaries = [];
       
       if (summaryResponse.ok) {

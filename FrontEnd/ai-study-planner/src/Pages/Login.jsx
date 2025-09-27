@@ -25,7 +25,7 @@ const Login = ({ onLogin }) => {
     try {
       console.log("Sending request to backend...");
       // Try without credentials first since the server doesn't appear to support them
-      const response = await fetch("http://127.0.0.1:5000/login", {
+      const response = await fetch("https://eduplanner2-3wye.onrender.com/login", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",

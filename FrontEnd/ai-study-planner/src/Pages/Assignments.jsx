@@ -496,7 +496,7 @@ function Assignments() {
   useEffect(() => {
     const loadAssignments = async () => {
       try {
-        const response = await fetch('https://eduplanner2-lntb.onrender.com/assignments');
+        const response = await fetch('https://eduplanner2-3wye.onrender.com/assignments');
         if (response.ok) {
           const data = await response.json();
           // Map backend assignment fields to frontend format
@@ -544,7 +544,7 @@ function Assignments() {
       // Get user ID from localStorage (assuming it's stored after login)
       const userId = localStorage.getItem('userId') || 'default-user';
       
-      const response = await fetch('https://eduplanner2-lntb.onrender.com/assignments', {
+      const response = await fetch('https://eduplanner2-3wye.onrender.com/assignments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -561,7 +561,7 @@ function Assignments() {
       
       if (response.ok) {
         // Reload assignments from backend to get the latest data
-        const assignmentsResponse = await fetch('https://eduplanner2-lntb.onrender.com/assignments');
+        const assignmentsResponse = await fetch('https://eduplanner2-3wye.onrender.com/assignments');
         if (assignmentsResponse.ok) {
           const data = await assignmentsResponse.json();
           // Map backend assignment fields to frontend format (same as in loadAssignments)
@@ -607,7 +607,7 @@ function Assignments() {
     if (assignmentToDelete) {
       try {
         // Call backend DELETE endpoint
-        fetch(`https://eduplanner2-lntb.onrender.com/assignments/${assignmentToDelete.id}`, {
+        fetch(`https://eduplanner2-3wye.onrender.com/assignments/${assignmentToDelete.id}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',

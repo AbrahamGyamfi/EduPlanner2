@@ -7,7 +7,7 @@ const saveQuizResultToBackend = async (quizResult) => {
   try {
     const userId = localStorage.getItem('userId') || 'default-user';
     
-    const response = await fetch('https://eduplanner2-lntb.onrender.com/quiz-results', {
+    const response = await fetch('https://eduplanner2-3wye.onrender.com/quiz-results', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

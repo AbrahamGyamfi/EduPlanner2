@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, BookOpen, TrendingUp, Target, Award, Eye, Timer } from 'lucide-react';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://eduplanner2-3wye.onrender.com';
 
 const SlideReadingAnalytics = ({ userId, courseId = null }) => {
   const [analytics, setAnalytics] = useState(null);

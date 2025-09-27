@@ -20,7 +20,7 @@ export const useSlideOperations = (courseData, setCourseData) => {
 
   const fetchAndExtractText = async (slide) => {
     // Fetch the file from backend
-    const response = await fetch(`http://localhost:5000/slides/${encodeURIComponent(slide)}`);
+    const response = await fetch(`https://eduplanner2-3wye.onrender.com/slides/${encodeURIComponent(slide)}`);
     const blob = await response.blob();
     if (slide.toLowerCase().endsWith(".pdf")) {
       // Extract text from PDF
@@ -46,7 +46,7 @@ export const useSlideOperations = (courseData, setCourseData) => {
     formData.append('file', file);
     
     const endpoint = type === "summarize" ? "/generate-summary" : "/generate-quiz";
-    const response = await fetch(`http://localhost:5000${endpoint}`, {
+    const response = await fetch(`https://eduplanner2-3wye.onrender.com${endpoint}`, {
       method: "POST",
       body: formData,
     });
@@ -68,7 +68,7 @@ const handleFileUpload = async (file) => {
     const formData = new FormData();
     formData.append('file', file);
 
-    const response = await fetch('http://localhost:5000/upload-slide', {
+    const response = await fetch('https://eduplanner2-3wye.onrender.com/upload-slide', {
       method: 'POST',
       body: formData,
     });
@@ -118,7 +118,7 @@ const handleFileUpload = async (file) => {
     setSummary("");
     try {
       // Get the actual file object from the backend
-      const response = await fetch(`http://localhost:5000/slides/${encodeURIComponent(slide)}`);
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/slides/${encodeURIComponent(slide)}`);
       const blob = await response.blob();
       const file = new File([blob], slide, { type: blob.type });
       
@@ -138,7 +138,7 @@ const handleFileUpload = async (file) => {
     setQuiz("");
     try {
       // Get the actual file object from the backend
-      const response = await fetch(`http://localhost:5000/slides/${encodeURIComponent(slide)}`);
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/slides/${encodeURIComponent(slide)}`);
       const blob = await response.blob();
       const file = new File([blob], slide, { type: blob.type });
       
@@ -165,7 +165,7 @@ const handleFileUpload = async (file) => {
     try {
       const encodedFilename = encodeURIComponent(deletingSlide);
       console.log('Attempting to delete:', encodedFilename);
-      const response = await fetch(`http://localhost:5000/slides/${encodedFilename}`, {
+      const response = await fetch(`https://eduplanner2-3wye.onrender.com/slides/${encodedFilename}`, {
         method: 'DELETE'
       });
       console.log('Delete response status:', response.status);

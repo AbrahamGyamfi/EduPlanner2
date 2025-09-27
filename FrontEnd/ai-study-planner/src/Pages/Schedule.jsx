@@ -81,7 +81,7 @@ const Schedule = () => {
   useEffect(() => {
     const loadAssignments = async () => {
       try {
-        const response = await fetch('https://eduplanner2-lntb.onrender.com/assignments');
+        const response = await fetch('https://eduplanner2-3wye.onrender.com/assignments');
         if (response.ok) {
           const data = await response.json();
           const mappedAssignments = data.assignments.map(assignment => ({
@@ -183,7 +183,7 @@ const Schedule = () => {
         };
       });
 
-      const response = await fetch('https://eduplanner2-lntb.onrender.com/schedule', {
+      const response = await fetch('https://eduplanner2-3wye.onrender.com/schedule', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -204,7 +204,7 @@ const Schedule = () => {
         // Auto-reload the schedule from server to ensure data consistency
         setTimeout(async () => {
           try {
-            const reloadResponse = await fetch(`https://eduplanner2-lntb.onrender.com/schedule/${userId}`);
+            const reloadResponse = await fetch(`https://eduplanner2-3wye.onrender.com/schedule/${userId}`);
             if (reloadResponse.ok) {
               const reloadData = await reloadResponse.json();
               if (reloadData.schedule && reloadData.schedule.schedule.length > 0) {
@@ -505,7 +505,7 @@ const Schedule = () => {
     // If this is an assignment session, update the assignment status
     if (session.assignmentId && isCompleted) {
       try {
-        const response = await fetch(`https://eduplanner2-lntb.onrender.com/assignments/${session.assignmentId}/complete`, {
+        const response = await fetch(`https://eduplanner2-3wye.onrender.com/assignments/${session.assignmentId}/complete`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -538,7 +538,7 @@ const Schedule = () => {
     try {
       const userId = localStorage.getItem('userId') || 'default-user';
       
-      const response = await fetch('https://eduplanner2-lntb.onrender.com/assignments', {
+      const response = await fetch('https://eduplanner2-3wye.onrender.com/assignments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -555,7 +555,7 @@ const Schedule = () => {
       
       if (response.ok) {
         // Reload assignments
-        const assignmentsResponse = await fetch('https://eduplanner2-lntb.onrender.com/assignments');
+        const assignmentsResponse = await fetch('https://eduplanner2-3wye.onrender.com/assignments');
         if (assignmentsResponse.ok) {
           const data = await assignmentsResponse.json();
           const mappedAssignments = data.assignments.map(assignment => ({
