@@ -1,3 +1,4 @@
+# Alternative simpler requirements for Render deployment
 Flask
 Flask-CORS
 Flask-RESTful
