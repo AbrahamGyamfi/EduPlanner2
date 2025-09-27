@@ -136,7 +136,7 @@ const CWAAnalysisPage = () => {
               <Brain className="w-8 h-8 text-white" />
             </div>
             <h1 className="text-4xl font-bold text-gray-800">
-              CWA Analysis Suite
+               Analysis Suite
             </h1>
           </div>
           <p className="text-lg text-gray-600 max-w-3xl mx-auto">

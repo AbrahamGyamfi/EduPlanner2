@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React from 'react';
+import { useState } from 'react';
+import { useNavigationLoading } from '../../contexts/NavigationLoadingContext';
+import DeleteConfirmationModal from '../DeleteConfirmationModal';
 
 // Define darker gradient combinations
 const courseGradients = {
@@ -106,8 +108,9 @@ const CourseCard = ({
   index = 0,
   onStatusChange
 }) => {
-  const navigate = useNavigate();
+  const { navigateWithLoading } = useNavigationLoading();
   const [isHovered, setIsHovered] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   // Background tracking calculations (not visible but used for progress)
   const progress = course.progress || 0;
@@ -146,17 +149,19 @@ const CourseCard = ({
   const handleDelete = (e) => {
     e.preventDefault();
     e.stopPropagation();
-    
-    if (window.confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
-      onDeleteCourse && onDeleteCourse(course.id);
-    }
+    setShowDeleteModal(true);
   };
 
-  const handleNavigate = (e) => {
+  const handleNavigate = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    // Navigate to the course detail page using the course ID
-    navigate(`/coursedetails/${course.id}`);
+    // Navigate to the course detail page using the course ID with loading transition
+    await navigateWithLoading(
+      `/coursedetails/${course.id}`,
+      {},
+      `Loading ${course.name || course.title}...`,
+      'Preparing your course materials'
+    );
   };
 
   const handleStatusToggle = (e) => {
@@ -226,14 +231,14 @@ const CourseCard = ({
       </div>
 
       {/* Simplified Visual Interface */}
-      <div className="p-5 bg-white" onClick={e => e.stopPropagation()}>
+      <div className="p-5 bg-white dark:bg-gray-800" onClick={e => e.stopPropagation()}>
         {/* Simple Progress Bar */}
         <div className="mb-4">
           <div className="flex justify-between items-center mb-1.5">
-            <span className="text-sm font-medium text-gray-900">Progress</span>
-            <span className="text-sm font-normal text-gray-700">{progress}%</span>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Progress</span>
+            <span className="text-sm font-normal text-gray-700 dark:text-gray-300">{progress}%</span>
           </div>
-          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
             <div 
               className={`h-full ${getProgressColor()} transition-all duration-300`}
               style={{ width: `${progress}%` }}
@@ -245,25 +250,25 @@ const CourseCard = ({
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="flex items-center">
             <svg 
-              className="w-4 h-4 text-gray-700 mr-2" 
+              className="w-4 h-4 text-gray-700 dark:text-gray-300 mr-2" 
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <span className="text-xs font-normal text-gray-700">{formatDuration(totalDuration)}</span>
+            <span className="text-xs font-normal text-gray-700 dark:text-gray-300">{formatDuration(totalDuration)}</span>
           </div>
           <div className="flex items-center justify-end">
             <svg 
-              className="w-4 h-4 text-gray-700 mr-2" 
+              className="w-4 h-4 text-gray-700 dark:text-gray-300 mr-2" 
               fill="none" 
               stroke="currentColor" 
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            <span className="text-xs font-normal text-gray-700">{totalSlides} Slides</span>
+            <span className="text-xs font-normal text-gray-700 dark:text-gray-300">{totalSlides} Slides</span>
           </div>
         </div>
 
@@ -275,7 +280,7 @@ const CourseCard = ({
               e.stopPropagation();
               handleNavigate(e);
             }}
-            className="px-3 py-1.5 text-indigo-600 text-xs font-medium hover:bg-indigo-50 rounded-lg transition-colors flex items-center"
+            className="px-3 py-1.5 text-indigo-600 dark:text-indigo-400 text-xs font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors flex items-center"
           >
             <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -290,7 +295,7 @@ const CourseCard = ({
                 e.stopPropagation();
                 handleNavigate(e);
               }}
-              className="px-4 py-1.5 rounded-lg text-xs font-medium bg-green-50 text-green-700 hover:bg-green-100 transition-colors flex items-center"
+              className="px-4 py-1.5 rounded-lg text-xs font-medium bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors flex items-center"
             >
               <svg className="w-3.5 h-3.5 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -304,7 +309,7 @@ const CourseCard = ({
                 e.stopPropagation();
                 handleNavigate(e);
               }}
-              className="px-4 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center"
+              className="px-4 py-1.5 bg-indigo-600 dark:bg-indigo-500 text-white text-xs font-medium rounded-lg hover:bg-indigo-700 dark:hover:bg-indigo-600 transition-colors flex items-center"
             >
               {getProgressStatus() === PROGRESS_STATUS.IN_PROGRESS ? (
                 <>
@@ -326,6 +331,20 @@ const CourseCard = ({
           )}
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        title="Delete Course"
+        message={`Are you sure you want to delete "${course.name || course.title}"? This action cannot be undone.`}
+        confirmText="Delete"
+        cancelText="Cancel"
+        onCancel={() => setShowDeleteModal(false)}
+        onConfirm={() => {
+          setShowDeleteModal(false);
+          onDeleteCourse && onDeleteCourse(course.id);
+        }}
+      />
     </div>
   );
 };

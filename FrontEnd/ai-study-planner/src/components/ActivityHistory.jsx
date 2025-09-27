@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useActivityHistory, ACTIVITY_TYPES } from '../hooks/useActivityHistory';
 
 const ActivityHistory = ({ isOpen, onClose }) => {
   const { activities, clearHistory, getActivityStats } = useActivityHistory();
   const [filter, setFilter] = useState('all');
   const [showStats, setShowStats] = useState(false);
+  const navigate = useNavigate();
 
   if (!isOpen) return null;
 
@@ -13,6 +15,26 @@ const ActivityHistory = ({ isOpen, onClose }) => {
   const filteredActivities = filter === 'all' 
     ? activities 
     : activities.filter(activity => activity.type === filter);
+
+  const handleReuse = (activity) => {
+    if (activity.type === ACTIVITY_TYPES.SUMMARY_GENERATE) {
+      navigate('/summary', {
+        state: {
+          summary: activity.metadata.summaryContent,
+          filename: activity.metadata.filename
+        }
+      });
+      onClose();
+    } else if (activity.type === ACTIVITY_TYPES.QUIZ_GENERATE) {
+      navigate('/quiz', {
+        state: {
+          quiz: activity.metadata.quizContent,
+          filename: activity.metadata.filename
+        }
+      });
+      onClose();
+    }
+  };
 
   const getActivityIcon = (type) => {
     switch (type) {
@@ -202,12 +224,28 @@ const ActivityHistory = ({ isOpen, onClose }) => {
                       <div className="flex-1">
                         <h4 className="font-semibold text-gray-800">{activity.description}</h4>
                         {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                          <div className="mt-1 text-sm text-gray-600">
-                            {Object.entries(activity.metadata).map(([key, value]) => (
-                              <span key={key} className="mr-4">
-                                <span className="font-medium">{key}:</span> {value}
-                              </span>
-                            ))}
+                          <div className="mt-1">
+                            <div className="text-sm text-gray-600 mb-2">
+                              {Object.entries(activity.metadata)
+                                .filter(([key]) => !['summaryContent', 'quizContent', 'canReuse'].includes(key))
+                                .map(([key, value]) => (
+                                  <span key={key} className="mr-4">
+                                    <span className="font-medium">{key}:</span> {typeof value === 'string' || typeof value === 'number' ? value : JSON.stringify(value)}
+                                  </span>
+                                ))
+                              }
+                            </div>
+                            {activity.metadata.canReuse && (
+                              <button
+                                onClick={() => handleReuse(activity)}
+                                className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium transition-colors"
+                              >
+                                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                View Again
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>

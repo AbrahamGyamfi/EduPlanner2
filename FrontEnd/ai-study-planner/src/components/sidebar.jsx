@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { NavLink } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigationLoading } from '../contexts/NavigationLoadingContext';
 import { 
   LayoutGrid, 
   BookOpen, 
@@ -12,11 +13,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
-  GraduationCap
+  GraduationCap,
+  Brain
 } from 'lucide-react';
 import Logo from './Logo';
 
-const Sidebar = ({ /* removed activePage */ }) => {
+const Sidebar = ({ onLogout }) => {
+  const { navigateWithLoading } = useNavigationLoading();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(true);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -24,21 +29,18 @@ const Sidebar = ({ /* removed activePage */ }) => {
     const firstName = localStorage.getItem('firstname');
     const lastName = localStorage.getItem('lastname');
     
-    if (firstName || lastName) {
-      return {
-        firstName: firstName || '',
-        lastName: lastName || '',
-        fullName: `${firstName || ''} ${lastName || ''}`.trim(),
-        initials: firstName && lastName 
-          ? `${firstName[0]}${lastName[0]}`.toUpperCase()
-          : firstName 
-            ? firstName.substring(0, 2).toUpperCase()
-            : lastName 
-              ? lastName.substring(0, 2).toUpperCase()
-              : ''
-      };
-    }
-    return null;
+    return {
+      firstName: firstName || '',
+      lastName: lastName || '',
+      displayName: firstName || '',  // Show only first name
+      initials: firstName && lastName 
+        ? `${firstName[0]}${lastName[0]}`.toUpperCase()
+        : firstName 
+          ? firstName.substring(0, 2).toUpperCase()
+          : lastName 
+            ? lastName.substring(0, 2).toUpperCase()
+            : 'US'
+    };
   });
 
   // Enhanced resize handler with debounce
@@ -73,22 +75,18 @@ const Sidebar = ({ /* removed activePage */ }) => {
       const firstName = localStorage.getItem('firstname');
       const lastName = localStorage.getItem('lastname');
       
-      if (firstName || lastName) {
-        setUserData({
-          firstName: firstName || '',
-          lastName: lastName || '',
-          fullName: `${firstName || ''} ${lastName || ''}`.trim(),
-          initials: firstName && lastName 
-            ? `${firstName[0]}${lastName[0]}`.toUpperCase()
-            : firstName 
-              ? firstName.substring(0, 2).toUpperCase()
-              : lastName 
-                ? lastName.substring(0, 2).toUpperCase()
-                : ''
-        });
-      } else {
-        setUserData(null);
-      }
+      setUserData({
+        firstName: firstName || '',
+        lastName: lastName || '',
+        displayName: firstName || '',  // Show only first name
+        initials: firstName && lastName 
+          ? `${firstName[0]}${lastName[0]}`.toUpperCase()
+          : firstName 
+            ? firstName.substring(0, 2).toUpperCase()
+            : lastName 
+              ? lastName.substring(0, 2).toUpperCase()
+              : 'US'
+      });
     };
 
     window.addEventListener('storage', handleProfileUpdate);
@@ -99,8 +97,9 @@ const Sidebar = ({ /* removed activePage */ }) => {
     { path: '/dashboard', label: 'Overview', icon: LayoutGrid },
     { path: '/courses', label: 'Courses', icon: BookOpen },
     { path: '/assignments', label: 'Assignments', icon: FileText },
+    { path: '/knowledge-check', label: 'Knowledge', icon: Brain },
     { path: '/schedule', label: 'Schedule', icon: Calendar },
-    { path: '/cwa-analysis', label: 'CWA Analysis', icon: BarChart2 },
+  { path: '/performance-analysis', label: 'Analytics', icon: BarChart2 },
     { path: '/profile', label: 'Profile', icon: User },
     { path: '/settings', label: 'Settings', icon: Settings },
   ];
@@ -114,11 +113,53 @@ const Sidebar = ({ /* removed activePage */ }) => {
   };
 
   const CompactLogo = () => (
-    <div className="relative w-8 h-8">
-      <GraduationCap className="w-8 h-8 text-blue-600" />
-      <Calendar className="w-4 h-4 text-blue-400 absolute -bottom-1 -right-1" />
+    <div className="relative w-10 h-10">
+      <GraduationCap className="w-10 h-10 text-blue-600" />
+      <Calendar className="w-5 h-5 text-blue-400 absolute -bottom-1 -right-1" />
     </div>
   );
+
+  const handleNavigation = async (path, label) => {
+    try {
+      if (isMobile) {
+        setIsMobileMenuOpen(false);
+      }
+      await navigateWithLoading(
+        path,
+        { replace: true },
+        `Loading ${label}...`,
+        'Please wait while we prepare your page'
+      );
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // toast.error('Failed to navigate. Please try again.');
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Use the logout handler passed from App component
+      if (onLogout) {
+        onLogout();
+      } else {
+        // Fallback: Clear all user-related data locally
+        ['isAuthenticated', 'token', 'firstname', 'lastname', 'email', 'userId', 'isLoggedIn', 'user'].forEach(key => {
+          localStorage.removeItem(key);
+        });
+      }
+      
+      await navigateWithLoading(
+        '/login', 
+        { replace: true }, 
+        'Logging out...', 
+        'See you soon!'
+      );
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Navigate directly as fallback
+      navigate('/login', { replace: true });
+    }
+  };
 
   return (
     <>
@@ -146,7 +187,7 @@ const Sidebar = ({ /* removed activePage */ }) => {
         {/* Logo and Toggle Button */}
         <div className={`px-6 py-8 flex items-center ${isOpen ? 'justify-between' : 'justify-center'}`}>
           {isOpen ? (
-            <Logo />
+            <Logo size="small" />
           ) : (
             <CompactLogo />
           )}
@@ -166,15 +207,13 @@ const Sidebar = ({ /* removed activePage */ }) => {
           <ul className="space-y-2">
             {navItems.map((item) => (
               <li key={item.path}>
-                <NavLink
-                  to={item.path}
-                  className={({ isActive }) =>
-                    `flex items-center ${isOpen ? 'gap-3' : 'justify-center'} px-4 py-3 rounded-lg transition-all duration-200 group ${
-                      isActive
-                        ? 'bg-[#1A1F2E] text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-[#1A1F2E]'
-                    }`
-                  }
+                <button
+                  onClick={() => handleNavigation(item.path, item.label)}
+                  className={`w-full flex items-center ${isOpen ? 'gap-3' : 'justify-center'} px-4 py-3 rounded-lg transition-all duration-200 group overflow-hidden ${
+                    location.pathname === item.path
+                      ? 'bg-[#1A1F2E] text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-[#1A1F2E]'
+                  }`}
                 >
                   <div className="relative">
                     <item.icon className={`w-5 h-5 transition-transform duration-200 ${!isOpen && 'group-hover:scale-110'}`} />
@@ -184,8 +223,8 @@ const Sidebar = ({ /* removed activePage */ }) => {
                       </div>
                     )}
                   </div>
-                  {isOpen && <span className="text-sm transition-opacity duration-200">{item.label}</span>}
-                </NavLink>
+                  {isOpen && <span className="text-sm transition-opacity duration-200 truncate">{item.label}</span>}
+                </button>
               </li>
             ))}
           </ul>
@@ -200,7 +239,7 @@ const Sidebar = ({ /* removed activePage */ }) => {
               </div>
               {!isOpen && userData && (
                 <div className="absolute left-full bottom-0 ml-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-                  {userData.fullName}
+                  {userData.displayName}
                 </div>
               )}
             </div>
@@ -208,16 +247,20 @@ const Sidebar = ({ /* removed activePage */ }) => {
               <>
                 <div className="flex-1">
                   {userData ? (
-                    <p className="text-sm text-white font-medium truncate">{userData.fullName}</p>
+                    <p className="text-sm text-white font-medium truncate">{userData.displayName}</p>
                   ) : (
-                    <NavLink to="/login" className="text-sm text-gray-400 hover:text-white">
+                    <button 
+                      onClick={() => handleNavigation('/login', 'Login')}
+                      className="text-sm text-gray-400 hover:text-white"
+                    >
                       Sign in
-                    </NavLink>
+                    </button>
                   )}
                 </div>
                 {userData && (
                   <button 
                     className="text-gray-400 hover:text-white transition-colors"
+                    onClick={handleLogout}
                     aria-label="Logout"
                   >
                     <LogOut className="w-5 h-5" />

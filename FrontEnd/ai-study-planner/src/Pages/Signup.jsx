@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import Logo from "../components/Logo";
 import "./Signup.css";
 // import {
 //   FaEnvelope,
@@ -12,7 +13,8 @@ import "./Signup.css";
 
 const Signup = () => {
   const [form, setForm] = useState({
-    name: "",
+    firstName: "",
+    lastName: "",
     email: "",
     password: "",
     confirmPassword: "",
@@ -56,6 +58,16 @@ const Signup = () => {
     setSuccess(false);
 
     // Client-side validation
+    if (!form.firstName.trim()) {
+      setError("First name is required.");
+      return;
+    }
+
+    if (!form.lastName.trim()) {
+      setError("Last name is required.");
+      return;
+    }
+
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -69,10 +81,9 @@ const Signup = () => {
     setLoading(true);
 
     try {
-      // Split name into first and last name
-      const nameParts = form.name.trim().split(' ');
-      const firstName = nameParts[0] || '';
-      const lastName = nameParts.slice(1).join(' ') || '';
+      // Use the separate first and last name fields
+      const firstName = form.firstName.trim();
+      const lastName = form.lastName.trim();
       
       // Generate a student ID if not provided
       const studentId = `STU${Date.now().toString().slice(-6)}`;
@@ -146,7 +157,7 @@ const Signup = () => {
             </span>
           </div>
         )}
-        <img src="/logo.png" alt="EduPlanner Logo" className="h-12 mb-4" />
+        <Logo variant="dark" className="mb-4" />
         <h2 className="text-2xl font-bold text-center text-gray-900 mb-1">
           Create Your Account
         </h2>
@@ -164,24 +175,45 @@ const Signup = () => {
           </div>
         )}
         <form onSubmit={handleSubmit} className="w-full space-y-5">
-          <div>
-            <label
-              className="block text-gray-700 font-medium mb-1"
-              htmlFor="name"
-            >
-              Full Name
-            </label>
-            <input
-              className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition placeholder-gray-400"
-              type="text"
-              id="name"
-              name="name"
-              placeholder="Enter your full name"
-              value={form.name}
-              onChange={handleChange}
-              required
-              disabled={loading}
-            />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label
+                className="block text-gray-700 font-medium mb-1"
+                htmlFor="firstName"
+              >
+                First Name
+              </label>
+              <input
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition placeholder-gray-400"
+                type="text"
+                id="firstName"
+                name="firstName"
+                placeholder="Enter your first name"
+                value={form.firstName}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
+            <div>
+              <label
+                className="block text-gray-700 font-medium mb-1"
+                htmlFor="lastName"
+              >
+                Last Name
+              </label>
+              <input
+                className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition placeholder-gray-400"
+                type="text"
+                id="lastName"
+                name="lastName"
+                placeholder="Enter your last name"
+                value={form.lastName}
+                onChange={handleChange}
+                required
+                disabled={loading}
+              />
+            </div>
           </div>
           <div>
             <label
@@ -394,23 +426,6 @@ const Signup = () => {
             {loading ? "Signing Up..." : "Sign Up →"}
           </button>
         </form>
-        <div className="flex items-center my-6 w-full">
-          <div className="flex-grow border-t border-gray-200"></div>
-          <span className="mx-3 text-gray-400 text-sm">OR</span>
-          <div className="flex-grow border-t border-gray-200"></div>
-        </div>
-        <button
-          type="button"
-          className="w-full flex items-center justify-center gap-2 border border-gray-200 rounded-full py-2 text-gray-700 font-medium hover:bg-gray-50 transition"
-          disabled={loading}
-        >
-          <img
-            src="https://www.svgrepo.com/show/475656/google-color.svg"
-            alt="Google"
-            className="h-5 w-5"
-          />
-          Sign up with Google
-        </button>
         <p className="mt-6 text-center text-gray-600 text-sm">
           Already have an account?{" "}
           <a

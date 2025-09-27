@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: edumaster-backend
+    env: python
+    region: oregon
+    buildCommand: |
+      cd Backend && pip install -r requirements.txt
+    startCommand: |
+      cd Backend && gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 start:app
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: False
+      - key: PORT
+        fromService:
+          type: web
+          name: edumaster-backend
+          property: port
+    # Add your environment variables here as secrets in Render dashboard:
+    # - MONGODB_URI (your MongoDB connection string)
+    # - SECRET_KEY (generate a secure secret key)
+    # - GEMINI_API_KEY (your Google Gemini API key)
+    # - CORS_ORIGINS (your frontend URLs separated by commas)
+    # - DATABASE_NAME (default: eduplanner)

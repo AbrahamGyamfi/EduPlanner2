@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Bell } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { useTheme } from '../contexts/ThemeContext';
+import '../styles/themes.css';
 
 const Navbar = ({ pageTitle }) => {
   const [firstName, setFirstName] = useState("");
+  const [notificationCount, setNotificationCount] = useState(2);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -11,21 +15,42 @@ const Navbar = ({ pageTitle }) => {
     if (storedName) {
       setFirstName(storedName);
     }
+    
+    // Load notification count from localStorage or API
+    const savedNotificationCount = localStorage.getItem('notificationCount');
+    if (savedNotificationCount) {
+      setNotificationCount(parseInt(savedNotificationCount));
+    }
   }, []);
 
+  const handleNotificationClick = () => {
+    // Show notification dropdown or navigate to notifications page
+    toast.success(`You have ${notificationCount} new notifications!`);
+    
+    // Optional: Reset notification count when clicked
+    setNotificationCount(0);
+    localStorage.setItem('notificationCount', '0');
+  };
+
   return (
-    <div className="bg-white shadow-md rounded-lg px-6 py-3">
+    <div className="card">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-gray-900">{pageTitle}</h1>
+        <h1 className="text-2xl font-semibold theme-text-primary">{pageTitle}</h1>
         
         <div className="flex items-center space-x-4">
           <div className="relative">
-            <button className="h-8 w-8 flex items-center justify-center text-gray-500 hover:text-gray-700 transition-colors">
+            <button 
+              className="h-8 w-8 flex items-center justify-center theme-text-muted hover:theme-text-secondary transition-colors"
+              onClick={handleNotificationClick}
+              title="View notifications"
+            >
               <Bell className="w-5 h-5" />
             </button>
-            <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-indigo-500 text-white text-xs flex items-center justify-center">
-              2
-            </span>
+            {notificationCount > 0 && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-indigo-500 text-white text-xs flex items-center justify-center">
+                {notificationCount > 9 ? '9+' : notificationCount}
+              </span>
+            )}
           </div>
           
           <div 
@@ -36,7 +61,7 @@ const Navbar = ({ pageTitle }) => {
               {firstName ? firstName.charAt(0).toUpperCase() : "?"}
             </div>
             <div className="hidden md:block">
-              <span className="text-sm font-medium text-gray-700 block">{firstName}</span>
+              <span className="text-sm font-medium theme-text-secondary block">{firstName}</span>
             </div>
           </div>
         </div>
