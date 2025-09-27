@@ -4,6 +4,15 @@
 .env.production
 .env.development
 *.env
+Backend/.env
+Frontend/.env
+**/Backend/.env
+**/Frontend/.env
+
+# Log files containing sensitive data
+*.log
+app.log
+Backend/app.log
 
 # API Keys and Secrets - CRITICAL SECURITY
 **/api_keys.*
