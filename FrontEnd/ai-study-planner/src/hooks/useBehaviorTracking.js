@@ -249,7 +249,7 @@ export function useBehaviorTracking(courses = []) {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/study-sessions', {
+      const response = await fetch('https://eduplanner2-lntb.onrender.com/study-sessions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -7,7 +7,7 @@ const NETWORK_THROTTLE_INTERVAL = 15000; // min 15s between network updates
 const MAX_BATCH_SIZE = 5; // batch up to 5 small deltas
 const MAX_RETRY_DELAY = 60 * 1000; // cap backoff at 60s
 const MIN_SESSION_DURATION = 60 * 1000; // 1 minute minimum to count as a study session
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://eduplanner2-lntb.onrender.com';
 
 export function useEnhancedStudyTracker(courseId, courseName, currentFile = null) {
   const [isActive, setIsActive] = useState(false);

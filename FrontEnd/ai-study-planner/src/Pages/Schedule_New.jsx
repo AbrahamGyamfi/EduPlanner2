@@ -319,7 +319,7 @@ const Schedule = () => {
 
   const loadAssignments = async () => {
     try {
-      const response = await fetch('http://localhost:5000/assignments');
+      const response = await fetch('https://eduplanner2-lntb.onrender.com/assignments');
       if (response.ok) {
         const data = await response.json();
         const mappedAssignments = data.assignments.map(assignment => ({
@@ -395,7 +395,7 @@ const Schedule = () => {
         notes: session.activity || 'Study session'
       }));
 
-      const response = await fetch('http://localhost:5000/schedule', {
+      const response = await fetch('https://eduplanner2-lntb.onrender.com/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -431,7 +431,7 @@ const Schedule = () => {
   const reloadScheduleFromServer = async () => {
     try {
       const userId = localStorage.getItem('userId') || 'default-user';
-      const response = await fetch(`http://localhost:5000/schedule/${userId}`);
+      const response = await fetch(`https://eduplanner2-lntb.onrender.com/schedule/${userId}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -620,7 +620,7 @@ const Schedule = () => {
     // Update assignment status if applicable
     if (session.assignmentId && isCompleted) {
       try {
-        await fetch(`http://localhost:5000/assignments/${session.assignmentId}/complete`, {
+        await fetch(`https://eduplanner2-lntb.onrender.com/assignments/${session.assignmentId}/complete`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ completed: true })

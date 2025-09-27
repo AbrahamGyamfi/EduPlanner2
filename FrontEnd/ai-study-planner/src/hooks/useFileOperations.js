@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useActivityHistory, ACTIVITY_TYPES } from './useActivityHistory';
 import { updateCourseProgress, PROGRESS_ACTIVITIES } from '../utils/progressTracking';
 
-const API_BASE_URL = 'http://localhost:5000';
+const API_BASE_URL = 'https://eduplanner2-lntb.onrender.com';
 
 export const useFileOperations = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);

@@ -60,7 +60,7 @@ const ActivityTimeBreakdown = ({ userId, timeRange = 7, showDetails = true }) =>
 
       // Fetch unified dashboard data
       const response = await fetch(
-        `http://localhost:5000/unified-dashboard-data/${userId}?days=${timeRange}`,
+        `https://eduplanner2-lntb.onrender.com/unified-dashboard-data/${userId}?days=${timeRange}`,
         {
           method: 'GET',
           headers: {
