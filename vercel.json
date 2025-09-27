@@ -1,8 +1,22 @@
 {
-  "rewrites": [
+  "name": "edu-planner2-r3pd",
+  "version": 2,
+  "builds": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
+      "src": "FrontEnd/ai-study-planner/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "build"
+      }
     }
-  ]
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/FrontEnd/ai-study-planner/build/index.html"
+    }
+  ],
+  "installCommand": "cd FrontEnd/ai-study-planner && npm install",
+  "buildCommand": "cd FrontEnd/ai-study-planner && npm run build",
+  "outputDirectory": "FrontEnd/ai-study-planner/build"
 }
