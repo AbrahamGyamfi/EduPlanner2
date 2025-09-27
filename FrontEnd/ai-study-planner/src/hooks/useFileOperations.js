@@ -3,8 +3,9 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useActivityHistory, ACTIVITY_TYPES } from './useActivityHistory';
 import { updateCourseProgress, PROGRESS_ACTIVITIES } from '../utils/progressTracking';
+import { API_BASE_URL } from '../config/api';
 
-const API_BASE_URL = 'https://eduplanner2-3wye.onrender.com';
+// const API_BASE_URL = 'https://eduplanner2-3wye.onrender.com'; // Replaced by centralized config
 
 export const useFileOperations = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);
