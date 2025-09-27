@@ -17,6 +17,7 @@ import SummaryPage from "./Pages/SummaryPage";
 import QuizPage from "./Pages/QuizPage";
 import InteractiveKnowledgeCheck from "./Pages/InteractiveKnowledgeCheck";
 import Sidebar from "./components/sidebar";
+import DebugInfo from "./components/DebugInfo";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import LoadingTransition from "./components/LoadingTransition";
 import { NavigationLoadingProvider, useNavigationLoading } from "./contexts/NavigationLoadingContext";
@@ -155,6 +156,7 @@ const App = () => {
       <Router>
         <NavigationLoadingProvider>
           <AppContent />
+          <DebugInfo />
           <Toaster
             position="top-right"
             toastOptions={{
