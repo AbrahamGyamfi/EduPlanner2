@@ -12,14 +12,11 @@ export const useTheme = () => {
 
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    // Initialize theme from localStorage or system preference
+    // Initialize theme from localStorage or default to light
     const savedTheme = localStorage.getItem('theme');
     if (savedTheme) return savedTheme;
     
-    // Check system preference
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      return 'dark';
-    }
+    // Default to light mode regardless of system preference
     return 'light';
   });
 
@@ -114,12 +111,28 @@ export const ThemeProvider = ({ children }) => {
 
   // Initialize theme and font size on mount
   useEffect(() => {
+    // Ensure the document starts with light theme attributes
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.documentElement.classList.remove('dark');
+    document.body.classList.remove('dark-theme');
+    
     applyTheme(theme);
     applyFontSize(fontSize);
   }, []);
 
   // Load user preferences from localStorage on mount
   useEffect(() => {
+    // For this update, we want to ensure everyone starts with light mode
+    // Remove this block after a few versions if you want to preserve user preferences
+    const hasSetDefaultToLight = localStorage.getItem('defaultLightModeSet');
+    if (!hasSetDefaultToLight) {
+      localStorage.setItem('theme', 'light');
+      localStorage.setItem('defaultLightModeSet', 'true');
+      setTheme('light');
+      applyTheme('light');
+      return;
+    }
+
     const savedTheme = localStorage.getItem('theme');
     const savedFontSize = localStorage.getItem('fontSize');
     
