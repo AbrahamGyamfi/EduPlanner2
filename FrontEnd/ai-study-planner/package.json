@@ -68,6 +68,7 @@
     "ajv-keywords": "^5.1.0",
     "autoprefixer": "^10.4.16",
     "cross-env": "^10.0.0",
-    "postcss": "^8.4.31"
+    "postcss": "^8.4.31",
+    "serve": "^14.2.1"
   }
 }

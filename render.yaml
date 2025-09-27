@@ -26,3 +26,15 @@ services:
     # - GEMINI_API_KEY (your Google Gemini API key)
     # - CORS_ORIGINS (your frontend URLs separated by commas)
     # - DATABASE_NAME (default: eduplanner)
+
+  - type: web
+    name: edumaster-frontend
+    env: node
+    region: oregon
+    buildCommand: |
+      cd FrontEnd/ai-study-planner && npm install && npm run build
+    startCommand: |
+      cd FrontEnd/ai-study-planner && npx serve -s build -p $PORT
+    envVars:
+      - key: REACT_APP_API_BASE_URL
+        value: https://eduplanner2-3wye.onrender.com
