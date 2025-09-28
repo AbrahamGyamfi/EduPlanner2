@@ -80,6 +80,8 @@ const Signup = () => {
     }
 
     setLoading(true);
+    console.log("API_BASE_URL being used:", API_BASE_URL);
+    console.log("Full signup URL:", `${API_BASE_URL}/signup`);
 
     try {
       // Use the separate first and last name fields

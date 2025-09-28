@@ -4,6 +4,7 @@ import SummarySection from '../components/SummarySection';
 import Toast from '../components/Toast';
 import { useActivityHistory, ACTIVITY_TYPES } from '../hooks/useActivityHistory';
 import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 
 function SummaryPage() {
   const location = useLocation();
@@ -21,8 +22,6 @@ function SummaryPage() {
     message: '',
     type: 'success'
   });
-  
-  const API_BASE_URL = 'http://localhost:5000';
   
   // Check if this summary is already saved
   useEffect(() => {

@@ -21,6 +21,8 @@ const Login = ({ onLogin }) => {
     event.preventDefault();
     setError("");
     setLoading(true);
+    console.log("API_BASE_URL being used:", API_BASE_URL);
+    console.log("Full login URL:", `${API_BASE_URL}/login`);
     console.log("Login attempt with:", { email, password: "***" });
 
     try {
