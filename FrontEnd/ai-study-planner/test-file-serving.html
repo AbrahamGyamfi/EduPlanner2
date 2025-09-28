@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Serving Test</title>
+</head>
+<body>
+    <h1>File Serving Test</h1>
+    <div id="results"></div>
+
+    <script>
+        // Test file URLs
+        const testFiles = [
+            'test_upload_20250827_104944.txt',
+            'Transcript.pdf',
+            'introduction_to_compilers_20250827_111806.pptx'
+        ];
+
+        const results = document.getElementById('results');
+
+        testFiles.forEach(filename => {
+            const url = `http://localhost:5000/serve-file/${encodeURIComponent(filename)}`;
+            console.log('Testing URL:', url);
+            
+            fetch(url)
+                .then(response => {
+                    const div = document.createElement('div');
+                    if (response.ok) {
+                        div.innerHTML = `<p style="color: green;">✅ ${filename} - Status: ${response.status}</p>`;
+                        
+                        // Try to display based on file type
+                        const ext = filename.split('.').pop().toLowerCase();
+                        if (ext === 'txt') {
+                            response.text().then(content => {
+                                div.innerHTML += `<pre style="background: #f0f0f0; padding: 10px; margin: 10px 0;">${content.substring(0, 200)}...</pre>`;
+                            });
+                        } else if (ext === 'pdf') {
+                            div.innerHTML += `<iframe src="${url}" width="100%" height="300px" style="border: 1px solid #ccc; margin: 10px 0;"></iframe>`;
+                        }
+                    } else {
+                        div.innerHTML = `<p style="color: red;">❌ ${filename} - Status: ${response.status} - ${response.statusText}</p>`;
+                    }
+                    results.appendChild(div);
+                })
+                .catch(error => {
+                    const div = document.createElement('div');
+                    div.innerHTML = `<p style="color: orange;">⚠️ ${filename} - Error: ${error.message}</p>`;
+                    results.appendChild(div);
+                });
+        });
+    </script>
+</body>
+</html>

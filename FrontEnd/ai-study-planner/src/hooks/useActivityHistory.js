@@ -17,15 +17,43 @@ export const useActivityHistory = () => {
   }, [activities]);
 
   const addActivity = (type, description, metadata = {}) => {
-    const newActivity = {
-      id: Date.now().toString(),
-      type,
-      description,
-      timestamp: new Date().toISOString(),
-      metadata,
-    };
+    try {
+      // Ensure metadata is serializable (no large non-serializable objects)
+      const serializableMetadata = { ...metadata };
+      if (serializableMetadata.summaryContent && serializableMetadata.summaryContent.length > 5000) {
+        serializableMetadata.summaryContent = serializableMetadata.summaryContent.substring(0, 5000) + '...';
+      }
+      
+      if (serializableMetadata.quizContent) {
+        // Store a summary of the quiz instead of the full object
+        serializableMetadata.quizSummary = {
+          questionCount: serializableMetadata.quizContent.questions?.length || 0,
+          firstQuestion: serializableMetadata.quizContent.questions?.[0]?.question || 'N/A'
+        };
+        delete serializableMetadata.quizContent; // Avoid storing large quiz object
+      }
 
-    setActivities(prev => [newActivity, ...prev].slice(0, 100)); // Keep only last 100 activities
+      const newActivity = {
+        id: Date.now().toString(),
+        type,
+        description,
+        timestamp: new Date().toISOString(),
+        metadata: serializableMetadata,
+        completed: false
+      };
+
+      setActivities(prev => [newActivity, ...prev].slice(0, 100));
+    } catch (error) {
+      console.error('Error adding activity:', error);
+    }
+  };
+
+  const markActivityAsCompleted = (activityId) => {
+    setActivities(prev =>
+      prev.map(activity =>
+        activity.id === activityId ? { ...activity, completed: true } : activity
+      )
+    );
   };
 
   const clearHistory = () => {
@@ -68,6 +96,7 @@ export const useActivityHistory = () => {
   return {
     activities,
     addActivity,
+    markActivityAsCompleted,
     clearHistory,
     getActivitiesByType,
     getActivitiesByDateRange,

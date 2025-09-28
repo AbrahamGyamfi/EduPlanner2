@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
-import { Zap, BookOpen, Clock, Brain, X, Loader, FileText, Calendar, Check, Search, List, Grid, Settings, TrendingUp, Target, Hourglass, Book, MoreHorizontal, Download, Edit2, Trash2, GripVertical } from "lucide-react";
+import { Zap, BookOpen, Clock, Brain, X, Loader, FileText, Calendar, Check, Search, List, Grid, Settings, TrendingUp, Target, Hourglass, Book, MoreHorizontal, Download, Edit2, Trash2, GripVertical, Save } from "lucide-react";
 
 const Schedule = () => {
   const [currentStep, setCurrentStep] = useState(0); // 0: overview, 1: courses, 2: times, 3: styles, 4: generated
@@ -22,6 +22,20 @@ const Schedule = () => {
   const [editingSession, setEditingSession] = useState(null);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [exportFormat, setExportFormat] = useState('json');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+  const [selectedSessions, setSelectedSessions] = useState(new Set());
+  const [isBulkEditMode, setIsBulkEditMode] = useState(false);
+  const [assignments, setAssignments] = useState([]);
+  const [assignmentScheduleMode, setAssignmentScheduleMode] = useState(false);
+  const [selectedAssignments, setSelectedAssignments] = useState([]);
+  const [showQuickAssignmentModal, setShowQuickAssignmentModal] = useState(false);
+  const [quickAssignmentData, setQuickAssignmentData] = useState({
+    title: '',
+    description: '',
+    dueDate: '',
+    courseId: ''
+  });
 
   // Define colors for course cards
   const courseColors = ['#EF4444', '#3B82F6', '#22C55E', '#F97316', '#A855F7', '#06B6D4'];
@@ -44,8 +58,14 @@ const Schedule = () => {
     { id: 'problem-solving', label: 'Problem Solving', description: 'Learn through reasoning', icon: '🎯' },
   ];
 
+  // Load saved schedule and preferences on component mount
   useEffect(() => {
+    loadSavedSchedule();
+    loadSavedPreferences();
+  }, []);
+
     // Load available courses from localStorage
+  useEffect(() => {
     const savedCourses = localStorage.getItem('courses');
     if (savedCourses) {
       try {
@@ -56,6 +76,171 @@ const Schedule = () => {
       }
     }
   }, []);
+
+  // Load assignments from backend
+  useEffect(() => {
+    const loadAssignments = async () => {
+      try {
+        const response = await fetch('http://localhost:5000/assignments');
+        if (response.ok) {
+          const data = await response.json();
+          const mappedAssignments = data.assignments.map(assignment => ({
+            id: assignment.assignment_id,
+            title: assignment.title,
+            description: assignment.description,
+            dueDate: assignment.dueDate,
+            status: assignment.status,
+            subject: assignment.courseName || 'General',
+            courseId: assignment.courseId,
+            userId: assignment.userId,
+            created_at: assignment.created_at,
+            completedAt: assignment.completedAt || null
+          }));
+          setAssignments(mappedAssignments);
+        }
+      } catch (error) {
+        console.error('Error loading assignments:', error);
+      }
+    };
+
+    loadAssignments();
+  }, []);
+
+  // Save schedule to localStorage whenever it changes
+  useEffect(() => {
+    if (generatedSchedule.length > 0) {
+      localStorage.setItem('study_schedule', JSON.stringify(generatedSchedule));
+    }
+  }, [generatedSchedule]);
+
+  // Save preferences to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('schedule_preferences', JSON.stringify(preferences));
+  }, [preferences]);
+
+  const loadSavedSchedule = () => {
+    try {
+      const savedSchedule = localStorage.getItem('study_schedule');
+      if (savedSchedule) {
+        const parsedSchedule = JSON.parse(savedSchedule);
+        // Convert date strings back to Date objects and ensure all sessions have IDs
+        const scheduleWithDates = parsedSchedule.map(session => ({
+          ...session,
+          fullDate: new Date(session.fullDate),
+          id: session.id || generateSessionId() // Ensure each session has an ID
+        }));
+        setGeneratedSchedule(scheduleWithDates);
+        if (scheduleWithDates.length > 0) {
+          setCurrentStep(4); // Show the generated schedule
+        }
+      }
+    } catch (error) {
+      console.error('Error loading saved schedule:', error);
+    }
+  };
+
+  const loadSavedPreferences = () => {
+    try {
+      const savedPreferences = localStorage.getItem('schedule_preferences');
+      if (savedPreferences) {
+        setPreferences(JSON.parse(savedPreferences));
+      }
+    } catch (error) {
+      console.error('Error loading saved preferences:', error);
+    }
+  };
+
+  const saveScheduleToBackend = async () => {
+    setIsSaving(true);
+    setSaveMessage('');
+    
+    try {
+      const userId = localStorage.getItem('userId') || 'default-user';
+      
+      // Convert frontend schedule format to backend format
+      const backendSchedule = generatedSchedule.map(session => {
+        // Map day number to day name
+        const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const dayName = session.fullDate ? dayNames[session.fullDate.getDay()] : 'monday';
+        
+        // Extract time from timeSlot (e.g., "9:00 - 11:00 AM" -> "09:00-11:00")
+        let timeString = '09:00-11:00'; // default
+        if (session.timeSlot) {
+          const timeMatch = session.timeSlot.match(/(\d{1,2}:\d{2})\s*-\s*(\d{1,2}:\d{2})/i);
+          if (timeMatch) {
+            timeString = `${timeMatch[1]}-${timeMatch[2]}`;
+          }
+        }
+        
+        return {
+          id: session.id,
+          day: dayName,
+          time: timeString,
+          subject: session.courseName || 'Study Session',
+          type: session.learningStyle || 'study',
+          location: 'Study Area',
+          notes: session.activity || 'Study session'
+        };
+      });
+
+      const response = await fetch('http://localhost:5000/schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: userId,
+          schedule: backendSchedule,
+          preferences: preferences,
+          schedule_name: 'My Study Schedule',
+          is_active: true
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setSaveMessage('✅ Schedule saved successfully to database!');
+        
+        // Auto-reload the schedule from server to ensure data consistency
+        setTimeout(async () => {
+          try {
+            const reloadResponse = await fetch(`http://localhost:5000/schedule/${userId}`);
+            if (reloadResponse.ok) {
+              const reloadData = await reloadResponse.json();
+              if (reloadData.schedule && reloadData.schedule.schedule.length > 0) {
+                const scheduleWithDates = reloadData.schedule.schedule.map(session => ({
+                  ...session,
+                  fullDate: new Date(session.fullDate || new Date()),
+                  id: session.id || generateSessionId()
+                }));
+                setGeneratedSchedule(scheduleWithDates);
+              }
+            }
+          } catch (error) {
+            console.error('Error reloading schedule:', error);
+          }
+        }, 1000);
+        
+        setTimeout(() => setSaveMessage(''), 4000);
+      } else {
+        const errorData = await response.json();
+        setSaveMessage(`❌ Error: ${errorData.error || 'Failed to save schedule'}`);
+        setTimeout(() => setSaveMessage(''), 4000);
+      }
+    } catch (error) {
+      console.error('Error saving schedule:', error);
+      setSaveMessage('❌ Network error - please try again');
+      setTimeout(() => setSaveMessage(''), 4000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+
+  // Generate unique ID for sessions
+  const generateSessionId = () => {
+    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  };
 
   const handleGenerateSchedule = () => {
     if (preferences.selectedCourses.length === 0) {
@@ -87,6 +272,79 @@ const Schedule = () => {
         return;
       }
 
+      // Assignment-driven scheduling
+      if (assignmentScheduleMode && assignments.length > 0) {
+        const pendingAssignments = assignments.filter(assignment => 
+          assignment.status !== 'completed' && 
+          selectedCourseObjects.some(course => course.id === assignment.courseId)
+        );
+
+        if (pendingAssignments.length > 0) {
+          // Sort assignments by due date (earliest first)
+          pendingAssignments.sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
+          
+          pendingAssignments.forEach(assignment => {
+            const course = selectedCourseObjects.find(c => c.id === assignment.courseId);
+            if (!course) return;
+
+            const dueDate = new Date(assignment.dueDate);
+            const today = new Date();
+            const daysUntilDue = Math.ceil((dueDate - today) / (1000 * 60 * 60 * 24));
+            
+            // Create study sessions leading up to the due date
+            const sessionsNeeded = Math.max(1, Math.min(3, Math.ceil(daysUntilDue / 2)));
+            
+            for (let i = 0; i < sessionsNeeded; i++) {
+              const sessionDate = new Date(dueDate);
+              sessionDate.setDate(dueDate.getDate() - (sessionsNeeded - i));
+              
+              // Skip if session date is in the past
+              if (sessionDate < today) continue;
+              
+              const randomTimeSlot = preferences.learningTimes[Math.floor(Math.random() * preferences.learningTimes.length)];
+              const randomLearningStyle = preferences.learningStyles[Math.floor(Math.random() * preferences.learningStyles.length)];
+              
+              const activityMapping = {
+                visual: ["Review materials for {assignmentTitle}", "Create diagrams for {assignmentTitle}", "Study visual aids for {assignmentTitle}"],
+                auditory: ["Listen to lectures for {assignmentTitle}", "Discuss {assignmentTitle} concepts", "Review notes for {assignmentTitle}"],
+                kinesthetic: ["Practice problems for {assignmentTitle}", "Work on {assignmentTitle} exercises", "Build project for {assignmentTitle}"],
+                "reading-writing": ["Read materials for {assignmentTitle}", "Write draft for {assignmentTitle}", "Research for {assignmentTitle}"],
+                "group-study": ["Group study for {assignmentTitle}", "Peer review for {assignmentTitle}", "Collaborate on {assignmentTitle}"],
+                "problem-solving": ["Solve problems for {assignmentTitle}", "Analyze {assignmentTitle} requirements", "Apply concepts to {assignmentTitle}"],
+              };
+
+              const possibleActivities = activityMapping[randomLearningStyle] || [];
+              const activityTemplate = possibleActivities[Math.floor(Math.random() * possibleActivities.length)] || "Work on {assignmentTitle}";
+              const activity = activityTemplate.replace(/{assignmentTitle}/g, assignment.title);
+
+              const priority = daysUntilDue <= 3 ? 'high' : 'normal';
+              const duration = Math.min(preferences.studyDuration, Math.max(45, 60 + (daysUntilDue <= 2 ? 30 : 0)));
+
+              newSchedule.push({
+                fullDate: sessionDate,
+                day: sessionDate.getDay() === 0 ? 7 : sessionDate.getDay(),
+                courseId: course.id,
+                courseName: course.name || course.title || 'Unnamed Course',
+                courseCode: course.code,
+                courseColor: courseColors[availableCourses.findIndex(c => c.id === course.id) % courseColors.length],
+                timeSlot: timeSlots.find(slot => slot.id === randomTimeSlot)?.time || 'Anytime',
+                duration: duration,
+                learningStyle: randomLearningStyle,
+                activity: activity,
+                priority: priority,
+                creditHours: course.creditHours || 3,
+                id: generateSessionId(),
+                assignmentId: assignment.id,
+                assignmentTitle: assignment.title,
+                dueDate: assignment.dueDate,
+                isAssignmentSession: true
+              });
+            }
+          });
+        }
+      }
+
+      // Regular schedule generation (existing logic)
       const activityMapping = {
         visual: ["Watch video lectures for {courseName}", "Create mind maps for {courseName}", "Review diagrams for {courseName}"],
         auditory: ["Listen to recordings for {courseName}", "Attend lectures for {courseName}", "Discuss concepts from {courseName}"],
@@ -96,11 +354,30 @@ const Schedule = () => {
         "problem-solving": ["Solve problems from {courseName}", "Analyze cases for {courseName}", "Apply concepts from {courseName}"],
       };
 
+      // Calculate total credit hours and study time distribution
+      const totalCreditHours = selectedCourseObjects.reduce((sum, course) => sum + (course.creditHours || 3), 0);
+      const totalStudyHoursPerWeek = Math.max(15, totalCreditHours * 2); // 2 hours per credit hour minimum
+      const totalStudyMinutesPerWeek = totalStudyHoursPerWeek * 60;
+      
+      // Distribute study time based on credit hours
+      const courseStudyTime = {};
+      selectedCourseObjects.forEach(course => {
+        const creditHours = course.creditHours || 3;
+        const proportion = creditHours / totalCreditHours;
+        courseStudyTime[course.id] = Math.round(totalStudyMinutesPerWeek * proportion);
+      });
+
       // Determine the start and end dates for generation based on the current calendar month
       const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
       startOfMonth.setHours(0, 0, 0, 0); // Normalize to start of day
 
       const courseDistributionTracker = new Map(); // Map<courseId, Set<dateString>>
+      const courseTimeTracker = new Map(); // Map<courseId, number> - track minutes used
+
+      // Initialize time trackers
+      selectedCourseObjects.forEach(course => {
+        courseTimeTracker.set(course.id, 0);
+      });
 
       const numWeeksToGenerate = 4; // Generate schedule for 4 weeks to ensure coverage
       for (let week = 0; week < numWeeksToGenerate; week++) {
@@ -122,9 +399,24 @@ const Schedule = () => {
           const daysToScheduleThisWeek = shuffledDaysInWeek.slice(0, preferences.studyDaysPerWeek);
 
           for (const studyDate of daysToScheduleThisWeek) {
-              // Cycle through courses for each study day
-              const course = selectedCourseObjects[Math.floor(Math.random() * selectedCourseObjects.length)];
-              if (!course) continue; // Should not happen if selectedCourseObjects > 0
+              // Find courses that need more study time
+              const coursesNeedingTime = selectedCourseObjects.filter(course => {
+                const timeUsed = courseTimeTracker.get(course.id) || 0;
+                const timeAllocated = courseStudyTime[course.id] || 0;
+                return timeUsed < timeAllocated;
+              });
+
+              if (coursesNeedingTime.length === 0) continue;
+
+              // Prioritize courses with less time used
+              coursesNeedingTime.sort((a, b) => {
+                const timeUsedA = courseTimeTracker.get(a.id) || 0;
+                const timeUsedB = courseTimeTracker.get(b.id) || 0;
+                return timeUsedA - timeUsedB;
+              });
+
+              const course = coursesNeedingTime[0];
+              if (!course) continue;
 
               // Prevent duplicates of the same course on the same date
               if (!courseDistributionTracker.has(course.id)) {
@@ -142,7 +434,13 @@ const Schedule = () => {
               const courseName = course.name || course.title || 'Unnamed Course';
               const activity = activityTemplate.replace(/{courseName}/g, courseName);
 
-              const priority = Math.random() < 0.3 ? 'high' : 'normal';
+              // Calculate session duration based on remaining time needed
+              const timeUsed = courseTimeTracker.get(course.id) || 0;
+              const timeAllocated = courseStudyTime[course.id] || 0;
+              const remainingTime = timeAllocated - timeUsed;
+              const sessionDuration = Math.min(preferences.studyDuration, Math.max(30, remainingTime));
+
+              const priority = course.creditHours >= 4 ? 'high' : 'normal';
 
               newSchedule.push({
                   fullDate: studyDate,
@@ -152,11 +450,16 @@ const Schedule = () => {
                   courseCode: course.code,
                   courseColor: courseColors[availableCourses.findIndex(c => c.id === course.id) % courseColors.length],
                   timeSlot: timeSlots.find(slot => slot.id === randomTimeSlot)?.time || 'Anytime',
-                  duration: preferences.studyDuration,
+                  duration: sessionDuration,
                   learningStyle: randomLearningStyle,
                   activity: activity,
                   priority: priority,
+                  creditHours: course.creditHours || 3,
+                  id: generateSessionId(), // Assign a unique ID
               });
+
+              // Update time tracker
+              courseTimeTracker.set(course.id, (courseTimeTracker.get(course.id) || 0) + sessionDuration);
               courseDistributionTracker.get(course.id).add(studyDate.toDateString());
           }
       }
@@ -173,10 +476,6 @@ const Schedule = () => {
     setIsEditMode(true);
   };
 
-  const handleDeleteSession = (sessionId) => {
-    setGeneratedSchedule(prev => prev.filter(session => session.id !== sessionId));
-  };
-
   const handleUpdateSession = (updatedSession) => {
     setGeneratedSchedule(prev => 
       prev.map(session => 
@@ -185,6 +484,123 @@ const Schedule = () => {
     );
     setIsEditMode(false);
     setEditingSession(null);
+    
+    // Auto-save after updating
+    setTimeout(() => {
+      saveScheduleToBackend();
+    }, 500);
+  };
+
+  const handleSessionCompletion = async (sessionId, isCompleted) => {
+    const session = generatedSchedule.find(s => s.id === sessionId);
+    if (!session) return;
+
+    // Update session completion status
+    const updatedSession = { ...session, completed: isCompleted, completedAt: isCompleted ? new Date().toISOString() : null };
+    
+    setGeneratedSchedule(prev => 
+      prev.map(s => s.id === sessionId ? updatedSession : s)
+    );
+
+    // If this is an assignment session, update the assignment status
+    if (session.assignmentId && isCompleted) {
+      try {
+        const response = await fetch(`http://localhost:5000/assignments/${session.assignmentId}/complete`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ completed: true })
+        });
+
+        if (response.ok) {
+          // Update local assignments state
+          setAssignments(prev => 
+            prev.map(assignment => 
+              assignment.id === session.assignmentId 
+                ? { ...assignment, status: 'completed', completedAt: new Date().toISOString() }
+                : assignment
+            )
+          );
+        }
+      } catch (error) {
+        console.error('Error updating assignment completion:', error);
+      }
+    }
+
+    // Auto-save after completion
+    setTimeout(() => {
+      saveScheduleToBackend();
+    }, 500);
+  };
+
+  const handleCreateQuickAssignment = async () => {
+    try {
+      const userId = localStorage.getItem('userId') || 'default-user';
+      
+      const response = await fetch('http://localhost:5000/assignments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          courseId: quickAssignmentData.courseId,
+          title: quickAssignmentData.title,
+          description: quickAssignmentData.description,
+          dueDate: quickAssignmentData.dueDate,
+          userId: userId,
+          courseName: availableCourses.find(c => c.id === quickAssignmentData.courseId)?.name || 'General Assignment'
+        })
+      });
+      
+      if (response.ok) {
+        // Reload assignments
+        const assignmentsResponse = await fetch('http://localhost:5000/assignments');
+        if (assignmentsResponse.ok) {
+          const data = await assignmentsResponse.json();
+          const mappedAssignments = data.assignments.map(assignment => ({
+            id: assignment.assignment_id,
+            title: assignment.title,
+            description: assignment.description,
+            dueDate: assignment.dueDate,
+            status: assignment.status,
+            subject: assignment.courseName || 'General',
+            courseId: assignment.courseId,
+            userId: assignment.userId,
+            created_at: assignment.created_at,
+            completedAt: assignment.completedAt || null
+          }));
+          setAssignments(mappedAssignments);
+        }
+
+        // Reset form
+        setQuickAssignmentData({
+          title: '',
+          description: '',
+          dueDate: '',
+          courseId: ''
+        });
+        setShowQuickAssignmentModal(false);
+
+        // Optionally regenerate schedule to include new assignment
+        if (assignmentScheduleMode) {
+          setTimeout(() => {
+            handleGenerateSchedule();
+          }, 1000);
+        }
+      }
+    } catch (error) {
+      console.error('Error creating assignment:', error);
+    }
+  };
+
+  const handleDeleteSession = (sessionId) => {
+    setGeneratedSchedule(prev => prev.filter(session => session.id !== sessionId));
+    
+    // Auto-save after deleting
+    setTimeout(() => {
+      saveScheduleToBackend();
+    }, 500);
   };
 
   const handleExportSchedule = () => {
@@ -396,6 +812,53 @@ END:VCALENDAR`;
     setGeneratedSchedule(newSchedule);
   };
 
+  const handleQuickEdit = (session, field, value) => {
+    const updatedSession = { ...session, [field]: value };
+    setGeneratedSchedule(prev => 
+      prev.map(s => s.id === session.id ? updatedSession : s)
+    );
+    
+    // Auto-save after quick edit
+    setTimeout(() => {
+      saveScheduleToBackend();
+    }, 500);
+  };
+
+  const handleQuickEditSession = (session) => {
+    setEditingSession(session);
+    setIsEditMode(true);
+  };
+
+  const handleBulkEdit = (field, value) => {
+    setGeneratedSchedule(prev => 
+      prev.map(session => 
+        selectedSessions.has(session.id) 
+          ? { ...session, [field]: value }
+          : session
+      )
+    );
+    
+    // Auto-save after bulk edit
+    setTimeout(() => {
+      saveScheduleToBackend();
+    }, 500);
+  };
+
+  const toggleSessionSelection = (sessionId) => {
+    const newSelected = new Set(selectedSessions);
+    if (newSelected.has(sessionId)) {
+      newSelected.delete(sessionId);
+    } else {
+      newSelected.add(sessionId);
+    }
+    setSelectedSessions(newSelected);
+  };
+
+  const clearSelection = () => {
+    setSelectedSessions(new Set());
+    setIsBulkEditMode(false);
+  };
+
   const renderContent = () => {
     const progress = getProgressPercentage();
     const filteredSchedule = getFilteredSchedule();
@@ -547,6 +1010,50 @@ END:VCALENDAR`;
                 />
               </div>
             </div>
+
+            {/* Assignment Integration */}
+            {assignments.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Assignment Integration</h3>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      id="assignmentScheduleMode"
+                      checked={assignmentScheduleMode}
+                      onChange={(e) => setAssignmentScheduleMode(e.target.checked)}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="assignmentScheduleMode" className="text-sm font-medium text-gray-700">
+                      Generate schedule based on assignments
+                    </label>
+                  </div>
+                </div>
+                
+                {assignmentScheduleMode && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="text-sm font-medium text-blue-800 mb-2">Assignment-Driven Scheduling</h4>
+                    <p className="text-sm text-blue-700 mb-3">
+                      This will create study sessions specifically for your pending assignments, prioritizing by due date.
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm font-medium text-blue-800">Pending Assignments:</span>
+                        <span className="text-sm text-blue-700 ml-2">
+                          {assignments.filter(a => a.status !== 'completed').length}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-sm font-medium text-blue-800">Overdue Assignments:</span>
+                        <span className="text-sm text-blue-700 ml-2">
+                          {assignments.filter(a => new Date(a.dueDate) < new Date() && a.status !== 'completed').length}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Progress and Navigation */}
             <div className="mt-auto pt-6 border-t border-gray-200">
@@ -784,6 +1291,50 @@ END:VCALENDAR`;
               >
                 Normal Priority
               </button>
+              
+              {/* Bulk Edit Controls */}
+              {generatedSchedule.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setIsBulkEditMode(!isBulkEditMode)}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors duration-200
+                      ${isBulkEditMode ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                  >
+                    {isBulkEditMode ? 'Exit Bulk Edit' : 'Bulk Edit'}
+                  </button>
+                  
+                  {isBulkEditMode && selectedSessions.size > 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-gray-600">{selectedSessions.size} selected</span>
+                      <select
+                        onChange={(e) => handleBulkEdit('priority', e.target.value)}
+                        className="text-xs border border-gray-300 rounded px-2 py-1"
+                      >
+                        <option value="">Set Priority</option>
+                        <option value="normal">Normal</option>
+                        <option value="high">High</option>
+                      </select>
+                      <select
+                        onChange={(e) => handleBulkEdit('duration', parseInt(e.target.value))}
+                        className="text-xs border border-gray-300 rounded px-2 py-1"
+                      >
+                        <option value="">Set Duration</option>
+                        <option value={30}>30m</option>
+                        <option value={45}>45m</option>
+                        <option value={60}>1h</option>
+                        <option value={90}>1.5h</option>
+                        <option value={120}>2h</option>
+                      </select>
+                      <button
+                        onClick={clearSelection}
+                        className="text-xs text-red-600 hover:text-red-800"
+                      >
+                        Clear
+              </button>
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Dashboard Cards */}
@@ -825,6 +1376,113 @@ END:VCALENDAR`;
                 </div>
               </div>
             </div>
+
+            {/* Credit Hours Summary */}
+            {generatedSchedule.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Credit Hours Distribution</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {Array.from(new Set(generatedSchedule.map(s => s.courseId))).map(courseId => {
+                    const course = availableCourses.find(c => c.id === courseId);
+                    const courseSessions = generatedSchedule.filter(s => s.courseId === courseId);
+                    const totalMinutes = courseSessions.reduce((sum, s) => sum + s.duration, 0);
+                    const creditHours = course?.creditHours || 3;
+                    const recommendedHours = creditHours * 2;
+                    const actualHours = totalMinutes / 60;
+                    
+                    return (
+                      <div key={courseId} className="border border-gray-200 rounded-lg p-4">
+                        <div className="flex justify-between items-start mb-2">
+                          <h4 className="font-medium text-gray-900">{course?.name || course?.title || 'Unnamed Course'}</h4>
+                          <span className="text-sm text-gray-500">{creditHours} credits</span>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Sessions:</span>
+                            <span className="font-medium">{courseSessions.length}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Study Time:</span>
+                            <span className="font-medium">{actualHours.toFixed(1)}h</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-600">Recommended:</span>
+                            <span className="font-medium">{recommendedHours}h/week</span>
+                          </div>
+                          <div className="w-full bg-gray-200 rounded-full h-2">
+                            <div 
+                              className={`h-2 rounded-full ${
+                                actualHours >= recommendedHours ? 'bg-green-500' : 
+                                actualHours >= recommendedHours * 0.7 ? 'bg-yellow-500' : 'bg-red-500'
+                              }`}
+                              style={{ width: `${Math.min(100, (actualHours / recommendedHours) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Assignment Progress Dashboard */}
+            {assignments.length > 0 && (
+              <div className="bg-white rounded-xl shadow-md p-6 mb-8 border border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Assignment Progress</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-blue-600">{assignments.length}</div>
+                    <div className="text-sm text-gray-600">Total Assignments</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">
+                      {assignments.filter(a => a.status === 'completed').length}
+                    </div>
+                    <div className="text-sm text-gray-600">Completed</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-yellow-600">
+                      {assignments.filter(a => a.status === 'in-progress').length}
+                    </div>
+                    <div className="text-sm text-gray-600">In Progress</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">
+                      {assignments.filter(a => new Date(a.dueDate) < new Date() && a.status !== 'completed').length}
+                    </div>
+                    <div className="text-sm text-gray-600">Overdue</div>
+                  </div>
+                </div>
+                
+                {/* Assignment-Schedule Integration Stats */}
+                {generatedSchedule.length > 0 && (
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Schedule Integration</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="bg-blue-50 rounded-lg p-3">
+                        <div className="text-sm font-medium text-blue-800">Assignment Sessions</div>
+                        <div className="text-lg font-bold text-blue-600">
+                          {generatedSchedule.filter(s => s.isAssignmentSession).length}
+                        </div>
+                      </div>
+                      <div className="bg-green-50 rounded-lg p-3">
+                        <div className="text-sm font-medium text-green-800">Completed Sessions</div>
+                        <div className="text-lg font-bold text-green-600">
+                          {generatedSchedule.filter(s => s.completed).length}
+                        </div>
+                      </div>
+                      <div className="bg-orange-50 rounded-lg p-3">
+                        <div className="text-sm font-medium text-orange-800">Pending Sessions</div>
+                        <div className="text-lg font-bold text-orange-600">
+                          {generatedSchedule.filter(s => !s.completed).length}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Weekly View Header */}
             {viewMode === 'calendar' && (
@@ -980,13 +1638,24 @@ END:VCALENDAR`;
                                             {...provided.draggableProps}
                                             className={`bg-white rounded-xl shadow-sm p-5 flex items-start space-x-4 border-l-4 border-t border-b border-r border-gray-200 group hover:shadow-md transition-all duration-200
                                               ${snapshot.isDragging ? 'shadow-lg ring-2 ring-blue-200 rotate-1 scale-105' : ''}
-                                              ${snapshot.isDragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+                                              ${snapshot.isDragging ? 'cursor-grabbing' : 'cursor-grab'}
+                                              ${isBulkEditMode && selectedSessions.has(session.id) ? 'ring-2 ring-purple-200 bg-purple-50' : ''}`}
                                             style={{
                                               ...provided.draggableProps.style,
                                               borderColor: sessionColor,
                                               transform: snapshot.isDragging ? provided.draggableProps.style?.transform : 'none'
                                             }}
                                           >
+                                            {/* Bulk Edit Checkbox */}
+                                            {isBulkEditMode && (
+                                              <input
+                                                type="checkbox"
+                                                checked={selectedSessions.has(session.id)}
+                                                onChange={() => toggleSessionSelection(session.id)}
+                                                className="mt-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                                              />
+                                            )}
+                                            
                                             <div {...provided.dragHandleProps} className="cursor-grab active:cursor-grabbing">
                                               <GripVertical className="w-5 h-5 text-gray-400 hover:text-gray-600" />
                                             </div>
@@ -996,10 +1665,49 @@ END:VCALENDAR`;
                                                 <h4 className="text-lg font-semibold text-gray-800">
                                                   {course.name || course.title || 'Unnamed Course'} 
                                                   <span className="text-base text-gray-500 font-normal ml-2">{course.code}</span>
+                                                  {session.isAssignmentSession && (
+                                                    <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                                      Assignment
+                                                    </span>
+                                                  )}
                                                 </h4>
                                                 <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                  {/* Assignment Completion Checkbox */}
+                                                  {session.isAssignmentSession && (
+                                                    <input
+                                                      type="checkbox"
+                                                      checked={session.completed || false}
+                                                      onChange={(e) => handleSessionCompletion(session.id, e.target.checked)}
+                                                      className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded"
+                                                      title="Mark assignment session as complete"
+                                                    />
+                                                  )}
+                                                  
+                                                  {/* Quick Edit Duration */}
+                                                  <select
+                                                    value={session.duration}
+                                                    onChange={(e) => handleQuickEdit(session, 'duration', parseInt(e.target.value))}
+                                                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                                                  >
+                                                    <option value={30}>30m</option>
+                                                    <option value={45}>45m</option>
+                                                    <option value={60}>1h</option>
+                                                    <option value={90}>1.5h</option>
+                                                    <option value={120}>2h</option>
+                                                  </select>
+                                                  
+                                                  {/* Quick Edit Priority */}
+                                                  <select
+                                                    value={session.priority}
+                                                    onChange={(e) => handleQuickEdit(session, 'priority', e.target.value)}
+                                                    className="text-xs border border-gray-300 rounded px-2 py-1 bg-white"
+                                                  >
+                                                    <option value="normal">Normal</option>
+                                                    <option value="high">High</option>
+                                                  </select>
+                                                  
                                                   <button 
-                                                    onClick={() => handleEditSession(session)}
+                                                    onClick={() => handleQuickEditSession(session)}
                                                     className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200"
                                                   >
                                                     <Edit2 className="w-4 h-4" />
@@ -1013,6 +1721,16 @@ END:VCALENDAR`;
                                                 </div>
                                               </div>
                                               <p className="text-gray-700 mb-2">{session.activity}</p>
+                                              {session.isAssignmentSession && (
+                                                <div className="mb-2 p-2 bg-orange-50 border border-orange-200 rounded-md">
+                                                  <p className="text-sm text-orange-800">
+                                                    <span className="font-medium">Assignment:</span> {session.assignmentTitle}
+                                                  </p>
+                                                  <p className="text-xs text-orange-600">
+                                                    Due: {new Date(session.dueDate).toLocaleDateString()}
+                                                  </p>
+                                                </div>
+                                              )}
                                               <div className="flex text-sm text-gray-600 space-x-4">
                                                 <span>{session.timeSlot}</span>
                                                 <span>{session.duration} minutes</span>
@@ -1102,8 +1820,56 @@ END:VCALENDAR`;
                       <span className="w-2.5 h-2.5 bg-green-500 rounded-full mr-2"></span>
                       {generatedSchedule.length} active sessions
                     </span>
+                    {saveMessage && (
+                      <span className={`text-sm px-3 py-1 rounded-full ${
+                        saveMessage.includes('Error') 
+                          ? 'bg-red-100 text-red-700' 
+                          : 'bg-green-100 text-green-700'
+                      }`}>
+                        {saveMessage}
+                      </span>
+                    )}
                   </div>
                   <div className="flex items-center space-x-4">
+                    {generatedSchedule.length > 0 && (
+                      <>
+                        <button
+                          onClick={saveScheduleToBackend}
+                          disabled={isSaving}
+                          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        >
+                          <Save className="w-4 h-4" />
+                          <span>{isSaving ? 'Saving...' : 'Save Schedule'}</span>
+                        </button>
+                        
+                        {/* Quick Actions - shown after save */}
+                        {saveMessage.includes('successfully') && (
+                          <div className="flex items-center space-x-2 animate-fade-in">
+                            <button
+                              onClick={handleExportSchedule}
+                              className="flex items-center space-x-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-all duration-200 text-sm"
+                            >
+                              <Download className="w-4 h-4" />
+                              <span>Export</span>
+                            </button>
+                            <button
+                              onClick={() => setViewMode('calendar')}
+                              className="flex items-center space-x-2 px-3 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all duration-200 text-sm"
+                            >
+                              <Calendar className="w-4 h-4" />
+                              <span>View Calendar</span>
+                            </button>
+                          </div>
+                        )}
+                        
+                        <button
+                          onClick={() => setCurrentStep(1)}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all duration-200"
+                        >
+                          Regenerate Schedule
+                        </button>
+                      </>
+                    )}
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                       <input 
@@ -1135,7 +1901,7 @@ END:VCALENDAR`;
               {/* Keep only the necessary modals */}
               {isEditMode && editingSession && (
                 <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 animate-fade-in">
-                  <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+                  <div className="bg-white rounded-lg shadow-xl p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
                     <div className="flex justify-between items-center mb-6">
                       <h3 className="text-xl font-bold text-gray-900">Edit Study Session</h3>
                       <button 
@@ -1146,37 +1912,51 @@ END:VCALENDAR`;
                       </button>
                     </div>
                     
-                    <div className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Course Selection */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Course</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
                         <select 
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           value={editingSession.courseId}
-                          onChange={(e) => setEditingSession(prev => ({ ...prev, courseId: e.target.value }))}
+                          onChange={(e) => {
+                            const selectedCourse = availableCourses.find(c => c.id === e.target.value);
+                            setEditingSession(prev => ({ 
+                              ...prev, 
+                              courseId: e.target.value,
+                              courseName: selectedCourse?.name || selectedCourse?.title || 'Unnamed Course',
+                              courseCode: selectedCourse?.code || '',
+                              creditHours: selectedCourse?.creditHours || 3,
+                              courseColor: courseColors[availableCourses.findIndex(c => c.id === e.target.value) % courseColors.length]
+                            }));
+                          }}
                         >
                           {availableCourses.map(course => (
                             <option key={course.id} value={course.id}>
-                              {course.name || course.title}
+                              {course.name || course.title} ({course.creditHours || 3} credits)
                             </option>
                           ))}
                         </select>
                       </div>
 
+                      {/* Date Selection */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Date</label>
                         <input 
                           type="date"
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           value={editingSession.fullDate.toISOString().split('T')[0]}
                           onChange={(e) => setEditingSession(prev => ({ 
                             ...prev, 
-                            fullDate: new Date(e.target.value)
+                            fullDate: new Date(e.target.value),
+                            day: new Date(e.target.value).getDay() === 0 ? 7 : new Date(e.target.value).getDay()
                           }))}
                         />
                       </div>
 
+                      {/* Time Slot */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Time Slot</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Time Slot</label>
                         <select 
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           value={editingSession.timeSlot}
@@ -1190,8 +1970,9 @@ END:VCALENDAR`;
                         </select>
                       </div>
 
+                      {/* Duration */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Duration (minutes)</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Duration (minutes)</label>
                         <input 
                           type="number"
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1205,8 +1986,25 @@ END:VCALENDAR`;
                         />
                       </div>
 
+                      {/* Learning Style */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Learning Style</label>
+                        <select 
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.learningStyle}
+                          onChange={(e) => setEditingSession(prev => ({ ...prev, learningStyle: e.target.value }))}
+                        >
+                          {learningStyles.map(style => (
+                            <option key={style.id} value={style.id}>
+                              {style.label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Priority */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
                         <select 
                           className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                           value={editingSession.priority}
@@ -1217,7 +2015,35 @@ END:VCALENDAR`;
                         </select>
                       </div>
 
-                      <div className="flex justify-end space-x-3 mt-6">
+                      {/* Activity Description */}
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Activity Description</label>
+                        <textarea
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          value={editingSession.activity}
+                          onChange={(e) => setEditingSession(prev => ({ ...prev, activity: e.target.value }))}
+                          rows="3"
+                          placeholder="Describe what you'll be doing in this study session..."
+                        />
+                      </div>
+
+                      {/* Credit Hours Info */}
+                      <div className="md:col-span-2">
+                        <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                          <h4 className="text-sm font-medium text-blue-800 mb-2">Course Information</h4>
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <span className="text-blue-600 font-medium">Credit Hours:</span> {editingSession.creditHours || 3}
+                            </div>
+                            <div>
+                              <span className="text-blue-600 font-medium">Recommended Study Time:</span> {(editingSession.creditHours || 3) * 2} hours/week
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
                         <button
                           onClick={() => setIsEditMode(false)}
                           className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
@@ -1230,7 +2056,6 @@ END:VCALENDAR`;
                         >
                           Save Changes
                         </button>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -1301,6 +2126,89 @@ END:VCALENDAR`;
                           <span>Export</span>
                         </button>
                       </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Quick Assignment Modal */}
+              {showQuickAssignmentModal && (
+                <div className="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 animate-fade-in">
+                  <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full">
+                    <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-xl font-bold text-gray-900">Quick Assignment</h3>
+                      <button 
+                        onClick={() => setShowQuickAssignmentModal(false)}
+                        className="text-gray-500 hover:text-gray-700 focus:outline-none"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Assignment Title</label>
+                        <input
+                          type="text"
+                          value={quickAssignmentData.title}
+                          onChange={(e) => setQuickAssignmentData(prev => ({ ...prev, title: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          placeholder="Enter assignment title"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <textarea
+                          value={quickAssignmentData.description}
+                          onChange={(e) => setQuickAssignmentData(prev => ({ ...prev, description: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          rows="3"
+                          placeholder="Enter assignment description"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Course</label>
+                        <select
+                          value={quickAssignmentData.courseId}
+                          onChange={(e) => setQuickAssignmentData(prev => ({ ...prev, courseId: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">Select a course</option>
+                          {availableCourses.map(course => (
+                            <option key={course.id} value={course.id}>
+                              {course.name || course.title} ({course.creditHours || 3} credits)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Due Date</label>
+                        <input
+                          type="date"
+                          value={quickAssignmentData.dueDate}
+                          onChange={(e) => setQuickAssignmentData(prev => ({ ...prev, dueDate: e.target.value }))}
+                          className="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+                      <button
+                        onClick={() => setShowQuickAssignmentModal(false)}
+                        className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleCreateQuickAssignment}
+                        disabled={!quickAssignmentData.title || !quickAssignmentData.courseId || !quickAssignmentData.dueDate}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Create Assignment
+                      </button>
                     </div>
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 
-const SuccessModal = ({ isOpen, onClose, title, message, filename }) => {
+const SuccessModal = ({ isOpen, onClose, title, message, filename, onViewFiles, showViewButton = true }) => {
   if (!isOpen) return null;
 
   return (
@@ -30,12 +30,25 @@ const SuccessModal = ({ isOpen, onClose, title, message, filename }) => {
             </div>
           )}
           
-          <button
-            onClick={onClose}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
-          >
-            Continue
-          </button>
+          <div className="space-y-2">
+            {showViewButton && onViewFiles && (
+              <button
+                onClick={() => {
+                  onViewFiles();
+                  onClose();
+                }}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg transition-colors"
+              >
+                📖 View & Study Files
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className={`w-full ${showViewButton && onViewFiles ? 'bg-gray-600 hover:bg-gray-700' : 'bg-green-600 hover:bg-green-700'} text-white font-semibold py-2 px-4 rounded-lg transition-colors`}
+            >
+              {showViewButton && onViewFiles ? 'Stay Here' : 'Continue'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Sidebar from '../components/sidebar';
 import Navbar from '../components/PageHead';
 import LoadingSpinner from '../components/LoadingSpinner';
 import {
@@ -31,7 +30,7 @@ const AnalyticCard = ({ title, value, children }) => (
   </div>
 );
 
-const AssignmentCard = ({ assignment, onStatusChange, onEdit, onDelete }) => {
+const AssignmentCard = ({ assignment, onStatusChange, onEdit, onDelete, onToggleCompletion }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedTitle, setEditedTitle] = useState(assignment.title);
   const [editedDescription, setEditedDescription] = useState(assignment.description);
@@ -56,6 +55,16 @@ const AssignmentCard = ({ assignment, onStatusChange, onEdit, onDelete }) => {
       default:
         return 'bg-gray-100 text-gray-800';
     }
+  };
+
+  const getCompletionStatus = () => {
+    if (assignment.status === 'completed') return true;
+    if (assignment.completedAt) return true;
+    return false;
+  };
+
+  const isOverdue = () => {
+    return new Date(assignment.dueDate) < new Date() && assignment.status !== 'completed';
   };
 
   if (isEditing) {
@@ -102,24 +111,54 @@ const AssignmentCard = ({ assignment, onStatusChange, onEdit, onDelete }) => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+    <div className={`bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow ${
+      getCompletionStatus() ? 'border-l-4 border-l-green-500' : 
+      isOverdue() ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-gray-300'
+    }`}>
       <div className="flex justify-between items-start">
         <div className="flex-1">
-          <h3 className="text-lg font-medium text-gray-900">
-            {assignment.title}
-          </h3>
-          <p className="text-sm text-gray-500 mt-1">
-            {assignment.description}
-          </p>
-          <div className="mt-4 flex items-center space-x-4">
-            <span className="text-sm text-gray-500">
-              Due: {new Date(assignment.dueDate).toLocaleDateString()}
-            </span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(assignment.status)}`}>
-              {assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)}
-            </span>
+          <div className="flex items-start space-x-3">
+            {/* Completion Checkbox */}
+            <div className="flex-shrink-0 mt-1">
+              <input
+                type="checkbox"
+                checked={getCompletionStatus()}
+                onChange={() => onToggleCompletion(assignment.id, !getCompletionStatus())}
+                className="h-5 w-5 text-green-600 focus:ring-green-500 border-gray-300 rounded transition-all duration-200 hover:scale-110"
+              />
+            </div>
+            
+            <div className="flex-1">
+              <h3 className={`text-lg font-medium ${
+                getCompletionStatus() ? 'line-through text-gray-500' : 'text-gray-900'
+              }`}>
+                {assignment.title}
+              </h3>
+              <p className={`text-sm mt-1 ${
+                getCompletionStatus() ? 'text-gray-400' : 'text-gray-500'
+              }`}>
+                {assignment.description}
+              </p>
+              <div className="mt-4 flex items-center space-x-4">
+                <span className={`text-sm ${
+                  isOverdue() ? 'text-red-600 font-medium' : 'text-gray-500'
+                }`}>
+                  Due: {new Date(assignment.dueDate).toLocaleDateString()}
+                  {isOverdue() && ' (Overdue)'}
+                </span>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(assignment.status)}`}>
+                  {assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)}
+                </span>
+                {getCompletionStatus() && assignment.completedAt && (
+                  <span className="text-xs text-green-600 font-medium">
+                    Completed: {new Date(assignment.completedAt).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
         </div>
+        
         <div className="flex items-center space-x-2">
           <select
             value={assignment.status}
@@ -385,19 +424,95 @@ const CreateAssignmentModal = ({ isOpen, onClose, onSubmit }) => {
   );
 };
 
+// Delete Confirmation Modal
+const DeleteConfirmationModal = ({ isOpen, onClose, onConfirm, title, message, itemName }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-md">
+        <div className="flex items-center mb-4">
+          <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 15.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+          <div className="ml-4">
+            <h3 className="text-lg font-medium text-gray-900">{title || 'Confirm Deletion'}</h3>
+          </div>
+        </div>
+        
+        <div className="mb-6">
+          <p className="text-sm text-gray-500">
+            {message || `Are you sure you want to delete "${itemName}"? This action cannot be undone.`}
+          </p>
+        </div>
+        
+        <div className="flex justify-end space-x-3">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function Assignments() {
   const [assignments, setAssignments] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [showCompletionCelebration, setShowCompletionCelebration] = useState(false);
+  const [lastCompletedAssignment, setLastCompletedAssignment] = useState(null);
+  const [deleteConfirmationModal, setDeleteConfirmationModal] = useState({
+    isOpen: false,
+    assignmentId: null,
+  });
+  const [assignmentToDelete, setAssignmentToDelete] = useState(null);
+
+  // Calculate completion statistics
+  const completionStats = {
+    total: assignments.length,
+    completed: assignments.filter(a => a.status === 'completed').length,
+    pending: assignments.filter(a => a.status === 'pending').length,
+    inProgress: assignments.filter(a => a.status === 'in-progress').length,
+    overdue: assignments.filter(a => new Date(a.dueDate) < new Date() && a.status !== 'completed').length,
+    completionRate: assignments.length > 0 ? Math.round((assignments.filter(a => a.status === 'completed').length / assignments.length) * 100) : 0
+  };
 
   // Load assignments on component mount
   useEffect(() => {
-    const loadAssignments = () => {
+    const loadAssignments = async () => {
       try {
-        const savedAssignments = localStorage.getItem('assignments');
-        if (savedAssignments) {
-          setAssignments(JSON.parse(savedAssignments));
+        const response = await fetch('http://localhost:5000/assignments');
+        if (response.ok) {
+          const data = await response.json();
+          // Map backend assignment fields to frontend format
+          const mappedAssignments = data.assignments.map(assignment => ({
+            id: assignment.assignment_id,
+            title: assignment.title,
+            description: assignment.description,
+            dueDate: assignment.dueDate,
+            status: assignment.status,
+            subject: assignment.courseName || 'General',
+            courseId: assignment.courseId,
+            userId: assignment.userId,
+            created_at: assignment.created_at,
+            completedAt: assignment.completedAt || null // Add completedAt to the frontend assignment object
+          }));
+          setAssignments(mappedAssignments);
         }
       } catch (error) {
         console.error('Error loading assignments:', error);
@@ -411,24 +526,65 @@ function Assignments() {
 
   // Save assignments whenever they change
   useEffect(() => {
-    localStorage.setItem('assignments', JSON.stringify(assignments));
+    if (assignments.length > 0) {
+      localStorage.setItem('assignments', JSON.stringify(assignments));
+      
+      // Trigger custom event to notify dashboard
+      const event = new CustomEvent('assignmentsUpdated', {
+        detail: { assignments }
+      });
+      window.dispatchEvent(event);
+      
+      console.log('📝 Assignments updated and saved:', assignments.length, 'assignments');
+    }
   }, [assignments]);
 
-  const handleCreateAssignment = (assignmentData) => {
-    const newAssignment = {
-      id: Date.now().toString(),
-      ...assignmentData,
-      status: 'pending'
-    };
-    setAssignments(prev => [...prev, newAssignment]);
-  };
-
-  const handleStatusChange = (id, newStatus) => {
-    setAssignments(prev =>
-      prev.map(assignment =>
-        assignment.id === id ? { ...assignment, status: newStatus } : assignment
-      )
-    );
+  const handleCreateAssignment = async (assignmentData) => {
+    try {
+      // Get user ID from localStorage (assuming it's stored after login)
+      const userId = localStorage.getItem('userId') || 'default-user';
+      
+      const response = await fetch('http://localhost:5000/assignments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          courseId: 'default-course',
+          title: assignmentData.title,
+          description: assignmentData.description,
+          dueDate: assignmentData.dueDate,
+          userId: userId,
+          courseName: 'General Assignment'
+        })
+      });
+      
+      if (response.ok) {
+        // Reload assignments from backend to get the latest data
+        const assignmentsResponse = await fetch('http://localhost:5000/assignments');
+        if (assignmentsResponse.ok) {
+          const data = await assignmentsResponse.json();
+          // Map backend assignment fields to frontend format (same as in loadAssignments)
+          const mappedAssignments = data.assignments.map(assignment => ({
+            id: assignment.assignment_id,
+            title: assignment.title,
+            description: assignment.description,
+            dueDate: assignment.dueDate,
+            status: assignment.status,
+            subject: assignment.courseName || 'General',
+            courseId: assignment.courseId,
+            userId: assignment.userId,
+            created_at: assignment.created_at,
+            completedAt: assignment.completedAt || null // Add completedAt to the frontend assignment object
+          }));
+          setAssignments(mappedAssignments);
+        }
+      } else {
+        console.error('Failed to create assignment');
+      }
+    } catch (error) {
+      console.error('Error creating assignment:', error);
+    }
   };
 
   const handleEditAssignment = (id, updatedAssignment) => {
@@ -440,9 +596,71 @@ function Assignments() {
   };
 
   const handleDeleteAssignment = (id) => {
-    if (window.confirm('Are you sure you want to delete this assignment?')) {
-      setAssignments(prev => prev.filter(assignment => assignment.id !== id));
+    setAssignmentToDelete(assignments.find(a => a.id === id));
+    setDeleteConfirmationModal({
+      isOpen: true,
+      assignmentId: id,
+    });
+  };
+
+  const handleConfirmDeleteAssignment = () => {
+    if (assignmentToDelete) {
+      try {
+        // Call backend DELETE endpoint
+        fetch(`http://localhost:5000/assignments/${assignmentToDelete.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+        
+        // Remove from local state only after successful backend deletion
+        setAssignments(prev => prev.filter(assignment => assignment.id !== assignmentToDelete.id));
+        console.log('Assignment deleted successfully');
+      } catch (error) {
+        console.error('Error deleting assignment:', error);
+        alert('Error deleting assignment. Please try again.');
+      } finally {
+        setDeleteConfirmationModal({
+          isOpen: false,
+          assignmentId: null,
+        });
+        setAssignmentToDelete(null);
+      }
     }
+  };
+
+  const handleToggleCompletion = (id, isCompleted) => {
+    const assignment = assignments.find(a => a.id === id);
+    
+    setAssignments(prev =>
+      prev.map(assignment =>
+        assignment.id === id ? { 
+          ...assignment, 
+          status: isCompleted ? 'completed' : 'pending', 
+          completedAt: isCompleted ? new Date().toISOString() : null 
+        } : assignment
+      )
+    );
+
+    // Show completion celebration
+    if (isCompleted && assignment) {
+      setLastCompletedAssignment(assignment);
+      setShowCompletionCelebration(true);
+      setTimeout(() => setShowCompletionCelebration(false), 3000);
+    }
+  };
+
+  const handleStatusChange = (id, newStatus) => {
+    setAssignments(prev =>
+      prev.map(assignment =>
+        assignment.id === id ? { 
+          ...assignment, 
+          status: newStatus,
+          completedAt: newStatus === 'completed' ? new Date().toISOString() : assignment.completedAt
+        } : assignment
+      )
+    );
   };
 
   const filteredAssignments = assignments.filter(assignment => {
@@ -453,9 +671,8 @@ function Assignments() {
   if (isLoading) {
     return (
       <div className="flex min-h-screen bg-gray-50">
-        <Sidebar activePage="assignments" />
         <div className="flex-1 flex items-center justify-center">
-          <div>Loading...</div>
+          <LoadingSpinner />
         </div>
       </div>
     );
@@ -490,6 +707,73 @@ function Assignments() {
           </button>
         </div>
 
+        {/* Progress Statistics */}
+        {assignments.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm p-6 mb-8">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Progress Overview</h3>
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => {
+                    const pendingAssignments = assignments.filter(a => a.status !== 'completed');
+                    pendingAssignments.forEach(assignment => {
+                      handleToggleCompletion(assignment.id, true);
+                    });
+                  }}
+                  className="px-3 py-1 text-sm bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                >
+                  Mark All Complete
+                </button>
+                <button
+                  onClick={() => {
+                    const completedAssignments = assignments.filter(a => a.status === 'completed');
+                    completedAssignments.forEach(assignment => {
+                      handleToggleCompletion(assignment.id, false);
+                    });
+                  }}
+                  className="px-3 py-1 text-sm bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
+                >
+                  Mark All Pending
+                </button>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{completionStats.total}</div>
+                <div className="text-sm text-gray-600">Total</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{completionStats.completed}</div>
+                <div className="text-sm text-gray-600">Completed</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">{completionStats.inProgress}</div>
+                <div className="text-sm text-gray-600">In Progress</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-600">{completionStats.pending}</div>
+                <div className="text-sm text-gray-600">Pending</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{completionStats.overdue}</div>
+                <div className="text-sm text-gray-600">Overdue</div>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-gray-700">Completion Rate</span>
+                <span className="text-sm font-medium text-gray-900">{completionStats.completionRate}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${completionStats.completionRate}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="space-y-4">
           {filteredAssignments.map(assignment => (
             <AssignmentCard
@@ -498,6 +782,7 @@ function Assignments() {
               onStatusChange={handleStatusChange}
               onEdit={handleEditAssignment}
               onDelete={handleDeleteAssignment}
+              onToggleCompletion={handleToggleCompletion}
             />
           ))}
 
@@ -518,6 +803,44 @@ function Assignments() {
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateAssignment}
         />
+
+        <DeleteConfirmationModal
+          isOpen={deleteConfirmationModal.isOpen}
+          onClose={() => setDeleteConfirmationModal({
+            isOpen: false,
+            assignmentId: null,
+          })}
+          onConfirm={handleConfirmDeleteAssignment}
+          itemName={assignmentToDelete ? assignmentToDelete.title : ''}
+        />
+
+        {/* Completion Celebration */}
+        {showCompletionCelebration && lastCompletedAssignment && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-fade-in">
+            <div className="bg-white rounded-lg shadow-xl p-8 max-w-md w-full text-center">
+              <div className="mb-4">
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Task Completed! 🎉</h3>
+                <p className="text-gray-600 mb-4">
+                  "{lastCompletedAssignment.title}" has been marked as complete!
+                </p>
+                <div className="text-sm text-gray-500">
+                  Completed on {new Date().toLocaleDateString()}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCompletionCelebration(false)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

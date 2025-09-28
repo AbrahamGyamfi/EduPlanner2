@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/PageHead';
+import '../styles/themes.css';
 
 const Profile = () => {
   const [profile, setProfile] = useState({
@@ -81,7 +82,7 @@ const Profile = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
+    <div className="min-h-screen theme-bg-secondary">
       <Navbar pageTitle="Profile" />
       <div className="max-w-3xl mx-auto px-4 py-10">
         {/* Profile Header */}
@@ -89,10 +90,10 @@ const Profile = () => {
           <div className="w-28 h-28 rounded-full bg-gradient-to-tr from-indigo-400 to-blue-400 flex items-center justify-center text-5xl text-white shadow-lg ring-4 ring-indigo-100 mb-4">
             {profile.fullName ? profile.fullName.charAt(0).toUpperCase() : 'J'}
           </div>
-          <h2 className="text-2xl font-bold text-gray-900">{profile.fullName || 'Jeremiah'}</h2>
-          <p className="text-gray-500 text-sm mb-2">@{profile.username || 'kk'}</p>
-          <p className="text-gray-600 text-center max-w-md mb-4">{profile.bio}</p>
-          <button onClick={handleEditProfile} className="px-5 py-2 rounded-full bg-indigo-600 text-white font-medium shadow hover:bg-indigo-700 transition">Edit Profile</button>
+          <h2 className="text-2xl font-bold theme-text-primary">{profile.fullName || 'Jeremiah'}</h2>
+          <p className="theme-text-muted text-sm mb-2">@{profile.username || 'kk'}</p>
+          <p className="theme-text-secondary text-center max-w-md mb-4">{profile.bio}</p>
+          <button onClick={handleEditProfile} className="btn btn-primary">Edit Profile</button>
         </div>
         {/* Stats Card */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-10">

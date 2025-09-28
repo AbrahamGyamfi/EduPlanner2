@@ -1,21 +1,27 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-// import Sidebar from "../components/sidebar";
 import Switch from "../components/Switch";
 import Navbar from '../components/PageHead';
+import NotificationSettings from '../components/NotificationSettings';
 import { IoIosArrowDown } from "react-icons/io";
+import { useTheme } from '../contexts/ThemeContext';
+import '../styles/themes.css';
 
 const Settings = () => {
   const navigate = useNavigate();
-  // const [userInfo, setUserInfo] = useState({
-  //   firstName: localStorage.getItem("firstname") || "",
-  //   lastName: localStorage.getItem("lastname") || "",
-  //   email: localStorage.getItem("email") || "",
-  ;
   
-  // Settings states
-  const [theme, setTheme] = useState("light");
-  const [fontSize, setFontSize] = useState("medium");
+  // Use the theme context
+  const { 
+    theme, 
+    fontSize, 
+    changeTheme, 
+    changeFontSize, 
+    themes, 
+    fontSizes,
+    isDark 
+  } = useTheme();
+  
+  // Other settings states
   const [pushNotifications, setPushNotifications] = useState(true);
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [autoplayVideos, setAutoplayVideos] = useState(false);
@@ -25,29 +31,13 @@ const Settings = () => {
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [showEraseModal, setShowEraseModal] = useState(false);
   
-  // Apply theme changes
-  useEffect(() => {
-    document.body.className = theme === "dark" ? "dark-theme" : "";
-    localStorage.setItem("theme", theme);
-  }, [theme]);
-  
-  // Apply font size changes
-  useEffect(() => {
-    document.documentElement.setAttribute('data-font-size', fontSize);
-    localStorage.setItem("fontSize", fontSize);
-  }, [fontSize]);
-  
   // Load saved preferences on mount
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
-    const savedFontSize = localStorage.getItem("fontSize");
     const savedPushNotifications = localStorage.getItem("pushNotifications");
     const savedEmailNotifications = localStorage.getItem("emailNotifications");
     const savedAutoplayVideos = localStorage.getItem("autoplayVideos");
     const savedLanguage = localStorage.getItem("language");
     
-    if (savedTheme) setTheme(savedTheme);
-    if (savedFontSize) setFontSize(savedFontSize);
     if (savedPushNotifications !== null) setPushNotifications(savedPushNotifications === "true");
     if (savedEmailNotifications !== null) setEmailNotifications(savedEmailNotifications === "true");
     if (savedAutoplayVideos !== null) setAutoplayVideos(savedAutoplayVideos === "true");
@@ -116,7 +106,7 @@ const Settings = () => {
   };
   
   return (
-    <div className="flex min-h-screen bg-[#f7f9fc]">
+    <div className="flex min-h-screen theme-bg-secondary">
       {/* <Sidebar activePage="settings" /> */}
       <div className="flex-1 p-8">
         {/* Navbar */}
@@ -125,40 +115,50 @@ const Settings = () => {
         </div>
         
         <div className="max-w-4xl mx-auto px-4 py-6">
-          <h2 className="text-xl font-medium text-gray-700 mb-1">Settings</h2>
-          <p className="text-sm text-gray-500 mb-8">Manage your account and application preferences.</p>
+          <h2 className="text-xl font-medium theme-text-primary mb-1">Settings</h2>
+          <p className="text-sm theme-text-muted mb-8">Manage your account and application preferences.</p>
           
           {/* Appearance Section */}
           <section className="mb-8">
-            <h3 className="text-base font-medium text-gray-600 mb-4">Appearance</h3>
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="section-header">Appearance</h3>
+            <div className="card">
               {/* Theme Selection */}
               <div className="mb-6">
                 <div className="flex justify-between items-center mb-3">
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">Theme</h4>
-                    <p className="text-xs text-gray-500">Change the appearance of EduPlanner</p>
+                    <h4 className="card-title">Theme</h4>
+                    <p className="card-subtitle">Change the appearance of EduPlanner</p>
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => setTheme("light")}
-                      className={`px-4 py-2 text-sm rounded-full ${
+                      onClick={() => changeTheme("light")}
+                      className={`btn ${
                         theme === "light" 
-                          ? "bg-indigo-600 text-white" 
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          ? "btn-primary" 
+                          : "btn-secondary"
                       }`}
                     >
                       Light
                     </button>
                     <button
-                      onClick={() => setTheme("dark")}
-                      className={`px-4 py-2 text-sm rounded-full ${
+                      onClick={() => changeTheme("dark")}
+                      className={`btn ${
                         theme === "dark" 
-                          ? "bg-indigo-600 text-white" 
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          ? "btn-primary" 
+                          : "btn-secondary"
                       }`}
                     >
                       Dark
+                    </button>
+                    <button
+                      onClick={() => changeTheme("system")}
+                      className={`btn ${
+                        theme === "system" 
+                          ? "btn-primary" 
+                          : "btn-secondary"
+                      }`}
+                    >
+                      System
                     </button>
                   </div>
                 </div>
@@ -168,36 +168,36 @@ const Settings = () => {
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">Font Size</h4>
-                    <p className="text-xs text-gray-500">Adjust the text size</p>
+                    <h4 className="card-title">Font Size</h4>
+                    <p className="card-subtitle">Adjust the text size</p>
                   </div>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => setFontSize("small")}
-                      className={`px-4 py-2 text-sm rounded-full ${
+                      onClick={() => changeFontSize("small")}
+                      className={`btn ${
                         fontSize === "small" 
-                          ? "bg-indigo-600 text-white" 
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          ? "btn-primary" 
+                          : "btn-secondary"
                       }`}
                     >
                       Small
                     </button>
                     <button
-                      onClick={() => setFontSize("medium")}
-                      className={`px-4 py-2 text-sm rounded-full ${
+                      onClick={() => changeFontSize("medium")}
+                      className={`btn ${
                         fontSize === "medium" 
-                          ? "bg-indigo-600 text-white" 
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          ? "btn-primary" 
+                          : "btn-secondary"
                       }`}
                     >
                       Medium
                     </button>
                     <button
-                      onClick={() => setFontSize("large")}
-                      className={`px-4 py-2 text-sm rounded-full ${
+                      onClick={() => changeFontSize("large")}
+                      className={`btn ${
                         fontSize === "large" 
-                          ? "bg-indigo-600 text-white" 
-                          : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                          ? "btn-primary" 
+                          : "btn-secondary"
                       }`}
                     >
                       Large
@@ -210,13 +210,13 @@ const Settings = () => {
           
           {/* Notifications Section */}
           <section className="mb-8">
-            <h3 className="text-base font-medium text-gray-600 mb-4">Notifications</h3>
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="section-header">Notifications</h3>
+            <div className="card">
               {/* Push Notifications */}
-              <div className="flex justify-between items-center py-4 border-b border-gray-100">
+              <div className="flex justify-between items-center py-4 border-b theme-border">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Push Notifications</h4>
-                  <p className="text-xs text-gray-500">Receive notifications about your courses and assignments</p>
+                  <h4 className="card-title">Push Notifications</h4>
+                  <p className="card-subtitle">Receive notifications about your courses and assignments</p>
                 </div>
                 <Switch 
                   enabled={pushNotifications} 
@@ -227,8 +227,8 @@ const Settings = () => {
               {/* Email Notifications */}
               <div className="flex justify-between items-center py-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Email Notifications</h4>
-                  <p className="text-xs text-gray-500">Receive email updates about your progress</p>
+                  <h4 className="card-title">Email Notifications</h4>
+                  <p className="card-subtitle">Receive email updates about your progress</p>
                 </div>
                 <Switch 
                   enabled={emailNotifications} 
@@ -236,17 +236,20 @@ const Settings = () => {
                 />
               </div>
             </div>
+            
+            {/* Advanced Notification Settings */}
+            <NotificationSettings userId={localStorage.getItem('userId') || 'default-user'} />
           </section>
           
           {/* Content Section */}
           <section className="mb-8">
-            <h3 className="text-base font-medium text-gray-600 mb-4">Content</h3>
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="section-header">Content</h3>
+            <div className="card">
               {/* Autoplay Videos */}
-              <div className="flex justify-between items-center py-4 border-b border-gray-100">
+              <div className="flex justify-between items-center py-4 border-b theme-border">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Autoplay Videos</h4>
-                  <p className="text-xs text-gray-500">Automatically play tutorial videos</p>
+                  <h4 className="card-title">Autoplay Videos</h4>
+                  <p className="card-subtitle">Automatically play tutorial videos</p>
                 </div>
                 <Switch 
                   enabled={autoplayVideos} 
@@ -258,12 +261,12 @@ const Settings = () => {
               <div className="py-4">
                 <div className="flex justify-between items-center">
                   <div>
-                    <h4 className="text-sm font-medium text-gray-700">Language</h4>
-                    <p className="text-xs text-gray-500">Change interface language</p>
+                    <h4 className="card-title">Language</h4>
+                    <p className="card-subtitle">Change interface language</p>
                   </div>
                   <div className="relative">
                     <button
-                      className="flex items-center justify-between w-32 px-3 py-2 text-sm bg-gray-100 rounded hover:bg-gray-200"
+                      className="btn btn-secondary w-32 justify-between"
                       onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
                     >
                       <span>{language}</span>
@@ -271,22 +274,22 @@ const Settings = () => {
                     </button>
                     
                     {showLanguageDropdown && (
-                      <div className="absolute right-0 mt-2 w-32 rounded-md shadow-lg bg-white z-10">
+                      <div className="absolute right-0 mt-2 w-32 rounded-md shadow-lg theme-bg-primary theme-border border z-10">
                         <div className="py-1">
                           <button
-                            className="block w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100"
+                            className="block w-full px-4 py-2 text-sm text-left theme-text-primary hover:theme-bg-tertiary transition-colors"
                             onClick={() => changeLanguage("English")}
                           >
                             English
                           </button>
                           <button
-                            className="block w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100"
+                            className="block w-full px-4 py-2 text-sm text-left theme-text-primary hover:theme-bg-tertiary transition-colors"
                             onClick={() => changeLanguage("Español")}
                           >
                             Español
                           </button>
                           <button
-                            className="block w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100"
+                            className="block w-full px-4 py-2 text-sm text-left theme-text-primary hover:theme-bg-tertiary transition-colors"
                             onClick={() => changeLanguage("Français")}
                           >
                             Français
@@ -302,17 +305,17 @@ const Settings = () => {
           
           {/* Account Section */}
           <section className="mb-8">
-            <h3 className="text-base font-medium text-gray-600 mb-4">Account</h3>
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="section-header">Account</h3>
+            <div className="card">
               {/* Sign Out */}
               <div className="flex justify-between items-center py-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Sign Out</h4>
-                  <p className="text-xs text-gray-500">Sign out from your EduPlanner account</p>
+                  <h4 className="card-title">Sign Out</h4>
+                  <p className="card-subtitle">Sign out from your EduPlanner account</p>
                 </div>
                 <button
                   onClick={handleSignOut}
-                  className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                  className="btn btn-secondary"
                 >
                   Sign Out
                 </button>
@@ -322,17 +325,17 @@ const Settings = () => {
           
           {/* Learning Preferences Section */}
           <section className="mb-8">
-            <h3 className="text-base font-medium text-gray-600 mb-4">Learning Preferences</h3>
-            <div className="bg-white rounded-lg shadow p-6 mb-6">
+            <h3 className="section-header">Learning Preferences</h3>
+            <div className="card">
               {/* Update Learning Preferences */}
               <div className="flex justify-between items-center py-4">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Update Learning Preferences</h4>
-                  <p className="text-xs text-gray-500">Change your subjects, learning style, and other educational preferences</p>
+                  <h4 className="card-title">Update Learning Preferences</h4>
+                  <p className="card-subtitle">Change your subjects, learning style, and other educational preferences</p>
                 </div>
                 <button
                   onClick={handleUpdateLearningPreferences}
-                  className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                  className="btn btn-primary"
                 >
                   Update Preferences
                 </button>
@@ -342,18 +345,18 @@ const Settings = () => {
           
           {/* Danger Zone Section */}
           <section>
-            <h3 className="text-base font-medium text-red-500 mb-4">Danger Zone</h3>
-            <p className="text-xs text-gray-500 mb-3">These actions are irreversible. Please proceed with caution.</p>
-            <div className="bg-white rounded-lg shadow border border-red-100">
+            <h3 className="section-header text-red-500 dark:text-red-400">Danger Zone</h3>
+            <p className="text-xs theme-text-muted mb-3">These actions are irreversible. Please proceed with caution.</p>
+            <div className="card border-2 border-red-200 dark:border-red-900">
               {/* Erase Chat History */}
-              <div className="flex justify-between items-center p-6 border-b border-gray-100">
+              <div className="flex justify-between items-center p-6 border-b theme-border">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Erase All Chat History</h4>
-                  <p className="text-xs text-gray-500">Permanently delete all your chat messages and conversations</p>
+                  <h4 className="card-title">Erase All Chat History</h4>
+                  <p className="card-subtitle">Permanently delete all your chat messages and conversations</p>
                 </div>
                 <button
                   onClick={() => setShowEraseModal(true)}
-                  className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600"
+                  className="px-4 py-2 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors"
                 >
                   Erase Chats
                 </button>
@@ -362,12 +365,12 @@ const Settings = () => {
               {/* Delete Account */}
               <div className="flex justify-between items-center p-6">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-700">Delete Account</h4>
-                  <p className="text-xs text-gray-500">Permanently delete your account and all associated data</p>
+                  <h4 className="card-title">Delete Account</h4>
+                  <p className="card-subtitle">Permanently delete your account and all associated data</p>
                 </div>
                 <button
                   onClick={() => setShowDeleteModal(true)}
-                  className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600"
+                  className="px-4 py-2 text-sm bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
                 >
                   Delete Account
                 </button>
@@ -380,37 +383,37 @@ const Settings = () => {
       {/* Delete Account Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+          <div className="card max-w-md w-full">
             <div className="flex items-center justify-center text-red-500 mb-4">
               <svg className="w-12 h-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-center mb-2">Delete Your Account</h3>
-            <p className="text-gray-600 text-center mb-6">
+            <h3 className="text-xl font-bold text-center theme-text-primary mb-2">Delete Your Account</h3>
+            <p className="theme-text-secondary text-center mb-6">
               This action cannot be undone. This will permanently delete your account and remove all associated data.
             </p>
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium theme-text-primary mb-2">
                 Please type "DELETE" to confirm
               </label>
               <input
                 type="text"
                 value={deleteConfirmText}
                 onChange={(e) => setDeleteConfirmText(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+                className="w-full px-3 py-2 theme-border border rounded-md theme-bg-secondary theme-text-primary focus:outline-none focus:ring-2 focus:ring-red-500"
               />
             </div>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowDeleteModal(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                className="btn btn-secondary"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteAccount}
-                className="px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600"
+                className="px-4 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
               >
                 Delete Account
               </button>
@@ -422,21 +425,21 @@ const Settings = () => {
       {/* Erase Chat History Modal */}
       {showEraseModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
-            <h3 className="text-xl font-bold mb-4">Erase Chat History</h3>
-            <p className="text-gray-600 mb-6">
+          <div className="card max-w-md w-full">
+            <h3 className="text-xl font-bold theme-text-primary mb-4">Erase Chat History</h3>
+            <p className="theme-text-secondary mb-6">
               This will permanently erase all your chat messages and conversations. This action cannot be undone.
             </p>
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setShowEraseModal(false)}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                className="btn btn-secondary"
               >
                 Cancel
               </button>
               <button
                 onClick={handleEraseChatHistory}
-                className="px-4 py-2 text-sm bg-orange-500 text-white rounded-md hover:bg-orange-600"
+                className="px-4 py-2 text-sm bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors"
               >
                 Erase Chats
               </button>

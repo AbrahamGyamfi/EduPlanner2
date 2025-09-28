@@ -18,11 +18,15 @@ import {
   BarChart,
   PieChart,
   LineChart,
-  Activity
+  Activity,
+  Eye,
+  Timer
 } from 'lucide-react';
 
 import { useData } from '../../contexts/DataContext';
 import PerformanceAnalyzer from '../../utils/PerformanceAnalyzer';
+import SlideReadingAnalytics from '../SlideReadingAnalytics';
+import SlideReadingAnalyticsTest from '../SlideReadingAnalyticsTest';
 
 // Optimized Performance Analysis Component
 const OptimizedPerformanceAnalysis = ({ 
@@ -30,7 +34,8 @@ const OptimizedPerformanceAnalysis = ({
   theme = {},
   userCourses: propUserCourses = [],
   quizResults: propQuizResults = [],
-  performanceAnalyzer: propPerformanceAnalyzer = null
+  performanceAnalyzer: propPerformanceAnalyzer = null,
+  userId = 'current_user'
 }) => {
   const { data, loading: dataLoading, error: dataError } = useData();
   const [activeTab, setActiveTab] = useState('overview');
@@ -38,6 +43,8 @@ const OptimizedPerformanceAnalysis = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [performanceAnalyzer, setPerformanceAnalyzer] = useState(null);
+  const [readingAnalytics, setReadingAnalytics] = useState(null);
+  const [loadingReading, setLoadingReading] = useState(false);
 
   // Use props if available, otherwise fall back to data context
   const userCourses = propUserCourses.length > 0 ? propUserCourses : (data.courses || []);
@@ -405,6 +412,12 @@ const OptimizedPerformanceAnalysis = ({
             ))}
           </div>
         </div>
+
+        {/* Slide Reading Analytics */}
+        <SlideReadingAnalytics userId={userId} />
+        
+        {/* Test Component - Remove this after verification */}
+        <SlideReadingAnalyticsTest userId={userId} />
 
         {/* Performance Insights */}
         <div className="mb-8">
