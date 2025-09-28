@@ -43,7 +43,9 @@ def create_app():
             r"/*": {
                 "origins": "*",
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"]
+                "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                "supports_credentials": False,
+                "expose_headers": ["Content-Type"]
             }
         })
     else:
@@ -52,7 +54,9 @@ def create_app():
             r"/*": {
                 "origins": cors_origins.split(','),
                 "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                "allow_headers": ["Content-Type", "Authorization"]
+                "allow_headers": ["Content-Type", "Authorization", "Accept"],
+                "supports_credentials": True,
+                "expose_headers": ["Content-Type"]
             }
         })
     
@@ -111,8 +115,9 @@ def create_app():
             # Use the first origin as default
             response.headers['Access-Control-Allow-Origin'] = cors_origins.split(',')[0]
         response.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Accept'
         response.headers['Access-Control-Max-Age'] = '3600'
+        response.headers['Content-Type'] = 'application/json'
         return response
     
     # Global error handlers for production

@@ -65,9 +65,13 @@ def rate_limit(max_attempts=MAX_ATTEMPTS_PER_WINDOW, window=RATE_LIMIT_WINDOW):
 def register_auth_routes(app):
     """Register authentication routes with the Flask app"""
     
-    @app.route("/signup", methods=["POST"])
+    @app.route("/signup", methods=["POST", "OPTIONS"])
     def signup():
         """User registration endpoint"""
+        if request.method == "OPTIONS":
+            # Handle preflight request
+            return jsonify({"status": "ok"}), 200
+            
         try:
             data = request.json
             if not data:
@@ -140,10 +144,14 @@ def register_auth_routes(app):
             logger.error(f"Signup error: {str(e)}")
             return jsonify({"error": "Internal server error"}), 500
 
-    @app.route("/login", methods=["POST"])
+    @app.route("/login", methods=["POST", "OPTIONS"])
     @rate_limit()
     def login():
         """User login endpoint with rate limiting"""
+        if request.method == "OPTIONS":
+            # Handle preflight request
+            return jsonify({"status": "ok"}), 200
+            
         try:
             data = request.get_json()
             if not data:
