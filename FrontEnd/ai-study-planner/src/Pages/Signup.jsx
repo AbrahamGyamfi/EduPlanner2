@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Logo from "../components/Logo";
+import { API_BASE_URL } from '../config/api';
 import "./Signup.css";
 // import {
 //   FaEnvelope,
@@ -98,7 +99,7 @@ const Signup = () => {
 
       console.log('Sending signup request:', { ...signupData, password: '***' });
 
-      const response = await fetch("http://127.0.0.1:5000/signup", {
+      const response = await fetch(`${API_BASE_URL}/signup`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

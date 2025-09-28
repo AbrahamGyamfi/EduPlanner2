@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 import { useActivityHistory, ACTIVITY_TYPES } from './useActivityHistory';
 import { updateCourseProgress, PROGRESS_ACTIVITIES } from '../utils/progressTracking';
 
@@ -7,7 +8,7 @@ const saveQuizResultToBackend = async (quizResult) => {
   try {
     const userId = localStorage.getItem('userId') || 'default-user';
     
-    const response = await fetch('http://localhost:5000/quiz-results', {
+    const response = await fetch(`${API_BASE_URL}/quiz-results`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

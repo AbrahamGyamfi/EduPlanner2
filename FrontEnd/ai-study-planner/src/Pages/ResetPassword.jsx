@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { FaLock, FaEye, FaEyeSlash, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { API_BASE_URL } from '../config/api';
 
 const ResetPassword = () => {
   const [password, setPassword] = useState("");
@@ -36,7 +37,7 @@ const ResetPassword = () => {
     // Verify token validity
     const verifyToken = async () => {
       try {
-        const response = await fetch("http://127.0.0.1:5000/verify-reset-token", {
+        const response = await fetch(`${API_BASE_URL}/verify-reset-token`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

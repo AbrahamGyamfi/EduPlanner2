@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback, useRef, useState, useEffect } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 export function useBehaviorTracking(courses = []) {
   const [behaviorData, setBehaviorData] = useState(null);
@@ -249,7 +250,7 @@ export function useBehaviorTracking(courses = []) {
         return;
       }
 
-      const response = await fetch('http://localhost:5000/study-sessions', {
+      const response = await fetch(`${API_BASE_URL}/study-sessions`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

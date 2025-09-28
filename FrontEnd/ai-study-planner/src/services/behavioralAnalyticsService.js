@@ -4,7 +4,8 @@
  * real activity-based academic performance predictions
  */
 
-const API_BASE_URL = 'http://localhost:5000';
+import { toast } from 'react-hot-toast';
+import { API_BASE_URL } from '../config/api';
 
 class BehavioralAnalyticsService {
   

@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { API_BASE_URL } from '../config/api';
 
 export function useCWAData() {
   const [courses, setCourses] = useState([]);
@@ -190,7 +192,7 @@ export function useCWAData() {
     try {
       // Try with API first
       try {
-        const response = await fetch('http://localhost:5000/api/analyze', {
+        const response = await fetch(`${API_BASE_URL}/api/analyze`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

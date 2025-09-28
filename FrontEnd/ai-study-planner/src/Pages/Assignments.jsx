@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/PageHead';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { API_BASE_URL } from '../config/api';
 import {
   getAssignments,
   saveAssignments,
@@ -496,7 +497,7 @@ function Assignments() {
   useEffect(() => {
     const loadAssignments = async () => {
       try {
-        const response = await fetch('http://localhost:5000/assignments');
+        const response = await fetch(`${API_BASE_URL}/assignments`);
         if (response.ok) {
           const data = await response.json();
           // Map backend assignment fields to frontend format
@@ -544,7 +545,7 @@ function Assignments() {
       // Get user ID from localStorage (assuming it's stored after login)
       const userId = localStorage.getItem('userId') || 'default-user';
       
-      const response = await fetch('http://localhost:5000/assignments', {
+      const response = await fetch(`${API_BASE_URL}/assignments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -561,7 +562,7 @@ function Assignments() {
       
       if (response.ok) {
         // Reload assignments from backend to get the latest data
-        const assignmentsResponse = await fetch('http://localhost:5000/assignments');
+        const assignmentsResponse = await fetch(`${API_BASE_URL}/assignments`);
         if (assignmentsResponse.ok) {
           const data = await assignmentsResponse.json();
           // Map backend assignment fields to frontend format (same as in loadAssignments)
@@ -607,7 +608,7 @@ function Assignments() {
     if (assignmentToDelete) {
       try {
         // Call backend DELETE endpoint
-        fetch(`http://localhost:5000/assignments/${assignmentToDelete.id}`, {
+        fetch(`${API_BASE_URL}/assignments/${assignmentToDelete.id}`, {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',

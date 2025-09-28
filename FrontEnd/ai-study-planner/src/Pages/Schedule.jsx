@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { DragDropContext, Droppable, Draggable } from "react-beautiful-dnd";
 import { Zap, BookOpen, Clock, Brain, X, Loader, FileText, Calendar, Check, Search, List, Grid, Settings, TrendingUp, Target, Hourglass, Book, MoreHorizontal, Download, Edit2, Trash2, GripVertical, Save } from "lucide-react";
+import { API_BASE_URL } from '../config/api';
 
 const Schedule = () => {
   const [currentStep, setCurrentStep] = useState(0); // 0: overview, 1: courses, 2: times, 3: styles, 4: generated
@@ -81,7 +82,7 @@ const Schedule = () => {
   useEffect(() => {
     const loadAssignments = async () => {
       try {
-        const response = await fetch('http://localhost:5000/assignments');
+        const response = await fetch(`${API_BASE_URL}/assignments`);
         if (response.ok) {
           const data = await response.json();
           const mappedAssignments = data.assignments.map(assignment => ({

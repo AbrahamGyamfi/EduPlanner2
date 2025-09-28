@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: edumaster-frontend
+    env: static
+    buildCommand: cd FrontEnd/ai-study-planner && npm ci && npm run build
+    staticPublishPath: FrontEnd/ai-study-planner/build
+    pullRequestPreviewsEnabled: false
+    envVars:
+      - key: NODE_VERSION
+        value: 18.18.0
+      - key: REACT_APP_API_URL
+        value: https://eduplanner2-3wye.onrender.com

@@ -3,8 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { useActivityHistory, ACTIVITY_TYPES } from './useActivityHistory';
 import { updateCourseProgress, PROGRESS_ACTIVITIES } from '../utils/progressTracking';
-
-const API_BASE_URL = 'http://localhost:5000';
+import { API_BASE_URL } from '../config/api';
 
 export const useFileOperations = () => {
   const [selectedFiles, setSelectedFiles] = useState([]);

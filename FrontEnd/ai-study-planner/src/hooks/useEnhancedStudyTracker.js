@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { API_BASE_URL } from '../config/api';
 
 // Constants
 const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutes in milliseconds
@@ -7,7 +8,6 @@ const NETWORK_THROTTLE_INTERVAL = 15000; // min 15s between network updates
 const MAX_BATCH_SIZE = 5; // batch up to 5 small deltas
 const MAX_RETRY_DELAY = 60 * 1000; // cap backoff at 60s
 const MIN_SESSION_DURATION = 60 * 1000; // 1 minute minimum to count as a study session
-const API_BASE_URL = 'http://localhost:5000';
 
 export function useEnhancedStudyTracker(courseId, courseName, currentFile = null) {
   const [isActive, setIsActive] = useState(false);
@@ -219,7 +219,7 @@ export function useEnhancedStudyTracker(courseId, courseName, currentFile = null
     }
     setCurrentReadingSession(null);
     return null;
-  }, [currentReadingSession]);
+  }, [currentReadingSession, sendBatchedUpdate]);
 
   // Reset inactivity timer
   const resetInactivityTimer = useCallback(() => {
@@ -245,7 +245,7 @@ export function useEnhancedStudyTracker(courseId, courseName, currentFile = null
         updateReadingProgress(interactions.progress, interactions);
       }
     }
-  }, [isActive, currentReadingSession]);
+  }, [isActive, currentReadingSession, resetInactivityTimer, updateReadingProgress]);
 
   // Add event listeners for user activity
   useEffect(() => {
